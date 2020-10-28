@@ -24,6 +24,7 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"lambda", &CanvasData::lambda},
         Field{"sigma", &CanvasData::sigma},
         Field{"order_arr", &CanvasData::order_arr},
+        Field{"parametrizationType", &CanvasData::parametrizationType},
     };
 };
 

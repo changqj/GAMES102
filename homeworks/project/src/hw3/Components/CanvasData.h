@@ -18,6 +18,8 @@ struct CanvasData {
 	float lambda = 1.0f;
 	float sigma = 0.1f;
 	int order_arr = 1;
+
+	int parametrizationType = 0;
 };
 
 #include "details/CanvasData_AutoRefl.inl"

@@ -14,10 +14,10 @@ using namespace Ubpa;
 
 #define MAX_PLOT_NUM_POINTS 10000
 
-void plot_IP(ImVec2*, CanvasData*, int&, const ImVec2);
-void plot_IG(ImVec2*, CanvasData*, int&, const ImVec2, float);
-void plot_AL(ImVec2*, CanvasData*, int&, const ImVec2, int);
-void plot_AR(ImVec2*, CanvasData*, int&, const ImVec2, int, float);
+void plot_IP(ImVec2*, CanvasData*, int&, const ImVec2, int);
+void plot_IG(ImVec2*, CanvasData*, int&, const ImVec2, float, int);
+void plot_AL(ImVec2*, CanvasData*, int&, const ImVec2, int, int);
+void plot_AR(ImVec2*, CanvasData*, int&, const ImVec2, int, float, int);
 
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 	schedule.RegisterCommand([](Ubpa::UECS::World* w) {
@@ -27,38 +27,40 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			return;
 
 		if (ImGui::Begin("Canvas")) {
-			ImGui::Checkbox("Enable grid", &data->opt_enable_grid);
+			ImGui::Checkbox("Enable grid", &data->opt_enable_grid); ImGui::SameLine(200);
 			ImGui::Checkbox("Enable context menu", &data->opt_enable_context_menu);
-			ImGui::Text("Mouse Left: drag to add lines, click to add points,\nMouse Right: drag to scroll, click for context menu.");
+			ImGui::Text("Mouse Left: drag to add lines, click to add points.\t Mouse Right: drag to scroll, click for context menu.");
 			ImGui::Separator();
-			ImGui::Checkbox("Lagrange", &data->enable_IP);
-			ImGui::SameLine(200);
-			ImGui::Checkbox("Gauss", &data->enable_IG);
-			ImGui::SameLine(310);
+			
+			ImGui::Checkbox("Lagrange", &data->enable_IP); ImGui::SameLine(200);
+			ImGui::Checkbox("Gauss", &data->enable_IG); ImGui::SameLine(310);
 
-			ImGui::BeginChild("sigma_id", ImVec2(200, 30));
+			ImGui::BeginChild("sigma_id", ImVec2(200, 22));
 			ImGui::SliderFloat("sigma", &data->sigma, 0.01f, 1.0f);
-			ImGui::EndChild();
+			ImGui::EndChild(); ImGui::SameLine(550);
+			ImGui::Text("Parametrization Type: ");
 
-			ImGui::Checkbox("Least Squares", &data->enable_ALS);
-			ImGui::SameLine(200);
-			ImGui::Checkbox("Ridge Regression", &data->enable_ARR);
-			ImGui::BeginChild("order_als_id", ImVec2(100, 30));
+			ImGui::Checkbox("Least Squares", &data->enable_ALS); ImGui::SameLine(200);
+			ImGui::Checkbox("Ridge Regression", &data->enable_ARR); ImGui::SameLine(550);
+			ImGui::RadioButton("chord", &data->parametrizationType, 0); ImGui::SameLine(630);
+			ImGui::RadioButton("centripetal", &data->parametrizationType, 1);
+
+			ImGui::BeginChild("order_als_id", ImVec2(100, 22));
 			ImGui::InputInt("order_als", &data->order_als);
 			data->order_als = data->order_als < 1 ? 1 : data->order_als;
 			data->order_als = data->order_als > 10 ? 10 : data->order_als;
-			ImGui::EndChild();
-			ImGui::SameLine(200);
-			ImGui::BeginChild("order_arr_id", ImVec2(100, 30));
+			ImGui::EndChild(); ImGui::SameLine(200);
+			ImGui::BeginChild("order_arr_id", ImVec2(100, 22));
 			ImGui::InputInt("order_arr", &data->order_arr);
 			// to limit to the range 1-10
 			data->order_arr = data->order_arr < 1 ? 1 : data->order_arr;
 			data->order_arr = data->order_arr > 10 ? 10 : data->order_arr;
-			ImGui::EndChild();
-			ImGui::SameLine(310);
-			ImGui::BeginChild("lambda_id", ImVec2(200, 30));
+			ImGui::EndChild(); ImGui::SameLine(310);
+			ImGui::BeginChild("lambda_id", ImVec2(200, 22));
 			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 10.0f);
-			ImGui::EndChild();
+			ImGui::EndChild(); ImGui::SameLine(550);
+			ImGui::RadioButton("uniform", &data->parametrizationType, 2); ImGui::SameLine(630);
+			ImGui::RadioButton("Foley", &data->parametrizationType, 3);
 
 			// Typically you would use a BeginChild()/EndChild() pair to benefit from a clipping region + own scrolling.
 			// Here we demonstrate that this can be replaced by simple offsetting + custom drawing + PushClipRect/PopClipRect() calls.
@@ -150,7 +152,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_IP) {
 					int p_index = 0;
 					ImVec2 IP[MAX_PLOT_NUM_POINTS];
-					plot_IP(IP, data, p_index, origin);
+					plot_IP(IP, data, p_index, origin, data->parametrizationType);
 					draw_list->AddPolyline(IP, p_index, IM_COL32(0, 255, 0, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20), IM_COL32(255, 255, 255, 255), "Lagrange");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13), IM_COL32(0, 255, 0, 255), 2.0f);
@@ -160,7 +162,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_IG) {
 					int p_index = 0;
 					ImVec2 IG[MAX_PLOT_NUM_POINTS];
-					plot_IG(IG, data, p_index, origin, data->sigma);
+					plot_IG(IG, data, p_index, origin, data->sigma, data->parametrizationType);
 					draw_list->AddPolyline(IG, p_index, IM_COL32(0, 255, 255, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - data->enable_IP * 20), IM_COL32(255, 255, 255, 255), "Gauss Base");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - data->enable_IP * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - data->enable_IP * 20), IM_COL32(0, 255, 255, 255), 2.0f);
@@ -170,7 +172,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_ALS) {
 					int p_index = 0;
 					ImVec2 AL[MAX_PLOT_NUM_POINTS];
-					plot_AL(AL, data, p_index, origin, data->order_als);
+					plot_AL(AL, data, p_index, origin, data->order_als, data->parametrizationType);
 					draw_list->AddPolyline(AL, p_index, IM_COL32(217, 84, 19, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(255, 255, 255, 255), "Least Square");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(217, 84, 19, 255), 2.0f);
@@ -180,7 +182,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_ARR) {
 					int p_index = 0;
 					ImVec2 AR[MAX_PLOT_NUM_POINTS];
-					plot_AR(AR, data, p_index, origin, data->order_arr, data->lambda);
+					plot_AR(AR, data, p_index, origin, data->order_arr, data->lambda, data->parametrizationType);
 					draw_list->AddPolyline(AR, p_index, IM_COL32(128, 91, 236, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(255, 255, 255, 255), "Ridge Regression");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(128, 91, 236, 255), 2.0f);
@@ -194,13 +196,29 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 }
 
 
-void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin) {
+void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int parametrizationType) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+	Eigen::VectorXf t;
+	switch (parametrizationType) {
+	case 0:
+		t = Parametrization::chordParameterization(points);
+		break;
+	case 1:
+		t = Parametrization::centripetalParameterization(points);
+		break;
+	case 2:
+		t = Parametrization::uniformParameterization(points.size());
+		break;
+	case 3:
+		t = Parametrization::FoleyParameterization(points);
+		break;
+	default:
+		t = Parametrization::chordParameterization(points);
+	}
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -223,13 +241,29 @@ void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin) {
 	}
 }
 
-void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float sigma = 1.0f) {
+void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float sigma, int parametrizationType) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+	Eigen::VectorXf t;
+	switch (parametrizationType) {
+	case 0:
+		t = Parametrization::chordParameterization(points);
+		break;
+	case 1:
+		t = Parametrization::centripetalParameterization(points);
+		break;
+	case 2:
+		t = Parametrization::uniformParameterization(points.size());
+		break;
+	case 3:
+		t = Parametrization::FoleyParameterization(points);
+		break;
+	default:
+		t = Parametrization::chordParameterization(points);
+	}
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -252,13 +286,29 @@ void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 	}
 }
 
-void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int order = 1) {
+void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int order, int parametrizationType) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+	Eigen::VectorXf t;
+	switch (parametrizationType) {
+	case 0:
+		t = Parametrization::chordParameterization(points);
+		break;
+	case 1:
+		t = Parametrization::centripetalParameterization(points);
+		break;
+	case 2:
+		t = Parametrization::uniformParameterization(points.size());
+		break;
+	case 3:
+		t = Parametrization::FoleyParameterization(points);
+		break;
+	default:
+		t = Parametrization::chordParameterization(points);
+	}
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -281,13 +331,29 @@ void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 	}
 }
 
-void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int order = 1, float lambda = 0.2f) {
+void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int order, float lambda, int parametrizationType) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+	Eigen::VectorXf t;
+	switch (parametrizationType) {
+	case 0:
+		t = Parametrization::chordParameterization(points);
+		break;
+	case 1:
+		t = Parametrization::centripetalParameterization(points);
+		break;
+	case 2:
+		t = Parametrization::uniformParameterization(points.size());
+		break;
+	case 3:
+		t = Parametrization::FoleyParameterization(points);
+		break;
+	default:
+		t = Parametrization::chordParameterization(points);
+	}
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
