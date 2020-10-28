@@ -216,8 +216,8 @@ void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin) {
 	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
 		float fx = 0, fy = 0;
 		for (int j = 0; j < coefficients_IP_x.size(); ++j) {
-			fx += coefficients_IP_x[j] * pow(t_i, j);
-			fy += coefficients_IP_y[j] * pow(t_i, j);
+			fx += coefficients_IP_x[j] * powf(t_i, j);
+			fy += coefficients_IP_y[j] * powf(t_i, j);
 		}
 		p[p_index++] = ImVec2(fx, fy);
 	}
@@ -274,8 +274,8 @@ void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
 		float fx = 0, fy = 0;
 		for (int j = 0; j < coefficients_AL_x.size(); ++j) {
-			fx += coefficients_AL_x[j] * pow(t_i, j);
-			fy += coefficients_AL_y[j] * pow(t_i, j);
+			fx += coefficients_AL_x[j] * powf(t_i, j);
+			fy += coefficients_AL_y[j] * powf(t_i, j);
 		}
 		p[p_index++] = ImVec2(fx, fy);
 	}
@@ -303,8 +303,8 @@ void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
 		float fx = 0, fy = 0;
 		for (int j = 0; j < coefficients_AR_x.size(); ++j) {
-			fx += coefficients_AR_x[j] * pow(t_i, j);
-			fy += coefficients_AR_y[j] * pow(t_i, j);
+			fx += coefficients_AR_x[j] * powf(t_i, j);
+			fy += coefficients_AR_y[j] * powf(t_i, j);
 		}
 		p[p_index++] = ImVec2(fx, fy);
 	}

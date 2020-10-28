@@ -76,14 +76,12 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			const pointf2 mouse_pos_in_canvas(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
 
 			// Add first and second point
-			if (!io.KeyCtrl && is_hovered && !data->adding_line && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-			{
+			if (!io.KeyCtrl && is_hovered && !data->adding_line && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 				data->points.push_back(mouse_pos_in_canvas);
 				data->points.push_back(mouse_pos_in_canvas);
 				data->adding_line = true;
 			}
-			if (data->adding_line)
-			{
+			if (data->adding_line) {
 				data->points.back() = mouse_pos_in_canvas;
 				if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
 					data->adding_line = false;
@@ -93,8 +91,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			// Pan (we use a zero mouse threshold when there's no context menu)
 			// You may decide to make that threshold dynamic based on whether the mouse is hovering something etc.
 			const float mouse_threshold_for_pan = data->opt_enable_context_menu ? -1.0f : 0.0f;
-			if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Right, mouse_threshold_for_pan))
-			{
+			if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Right, mouse_threshold_for_pan)) {
 				data->scrolling[0] += io.MouseDelta.x;
 				data->scrolling[1] += io.MouseDelta.y;
 			}
@@ -103,8 +100,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
 			if (data->opt_enable_context_menu && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && drag_delta.x == 0.0f && drag_delta.y == 0.0f)
 				ImGui::OpenPopupContextItem("context");
-			if (ImGui::BeginPopup("context"))
-			{
+			if (ImGui::BeginPopup("context")) {
 				if (data->adding_line)
 					data->points.resize(data->points.size() - 2);
 				data->adding_line = false;
@@ -115,8 +111,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 
 			// Draw grid + all lines in the canvas
 			draw_list->PushClipRect(canvas_p0, canvas_p1, true);
-			if (data->opt_enable_grid)
-			{
+			if (data->opt_enable_grid) {
 				const float GRID_STEP = 64.0f;
 				for (float x = fmodf(data->scrolling[0], GRID_STEP); x < canvas_sz.x; x += GRID_STEP)
 					draw_list->AddLine(ImVec2(canvas_p0.x + x, canvas_p0.y), ImVec2(canvas_p0.x + x, canvas_p1.y), IM_COL32(200, 200, 200, 40));
@@ -127,10 +122,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				draw_list->AddLine(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), ImVec2(origin.x + data->points[n + 1][0], origin.y + data->points[n + 1][1]), IM_COL32(255, 255, 0, 255), 2.0f);
 
 
-			for (int n = 0; n < data->points.size(); n += 2)
-			{
-				if (data->points[n][0] == data->points[n + 1][0] && data->points[n][1] == data->points[n + 1][1])
-				{
+			for (int n = 0; n < data->points.size(); n += 2) {
+				if (data->points[n][0] == data->points[n + 1][0] && data->points[n][1] == data->points[n + 1][1]) {
 					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 8, IM_COL32(255, 255, 255, 255));
 				}
 			}
@@ -163,7 +156,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					ImVec2 AL[MAX_PLOT_NUM_POINTS];
 					plot_AL(AL, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order_als);
 					draw_list->AddPolyline(AL, p_index, IM_COL32(217, 84, 19, 255), false, 2.0f);
-					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP+data->enable_IG) * 20), IM_COL32(255, 255, 255, 255), "Least Square");
+					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(255, 255, 255, 255), "Least Square");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(217, 84, 19, 255), 2.0f);
 				}
 
@@ -185,8 +178,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 }
 
 
-void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right)
-{
+void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
@@ -196,8 +188,7 @@ void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 
 	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
+	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step) {
 		float fx = 0;
 		for (int j = 0; j < coefficients_IP.size(); ++j)
 			fx += coefficients_IP[j] * pow(x, j);
@@ -205,8 +196,7 @@ void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 	}
 }
 
-void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, float sigma = 1.0f)
-{
+void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, float sigma = 1.0f) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
@@ -216,8 +206,7 @@ void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 
 	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
+	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step) {
 		float fx = coefficients_IG[0];
 		for (int j = 1; j < coefficients_IG.size(); ++j)
 			fx += coefficients_IG[j] * expf(-(x - points[j - 1][0]) * (x - points[j - 1][0]) / (2 * sigma * sigma));
@@ -225,8 +214,7 @@ void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 	}
 }
 
-void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, int order = 1)
-{
+void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, int order = 1) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
@@ -236,8 +224,7 @@ void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 
 	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
+	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step) {
 		float fx = 0;
 		for (int j = 0; j < coefficients_AL.size(); ++j)
 			fx += coefficients_AL[j] * pow(x, j);
@@ -245,8 +232,7 @@ void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 	}
 }
 
-void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, int order = 1, float lambda = 0.2f)
-{
+void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, int order = 1, float lambda = 0.2f) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
@@ -256,8 +242,7 @@ void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 
 	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
+	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step) {
 		float fx = 0;
 		for (int j = 0; j < coefficients_AR.size(); ++j)
 			fx += coefficients_AR[j] * pow(x, j);

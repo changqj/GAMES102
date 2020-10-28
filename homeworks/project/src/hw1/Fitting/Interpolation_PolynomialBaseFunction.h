@@ -7,7 +7,7 @@ namespace Fitting {
 		std::vector<Ubpa::pointf2> points) {
 		int n = points.size();
 
-		Eigen::MatrixXf normal_equation = Eigen::MatrixXf::Zero(n,n);
+		Eigen::MatrixXf normal_equation = Eigen::MatrixXf::Zero(n, n);
 		Eigen::VectorXf y = Eigen::VectorXf::Zero(n);
 		for (int i = 0; i < n; ++i) {
 			for (int j = 0; j < n; ++j)
