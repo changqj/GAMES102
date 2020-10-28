@@ -20,7 +20,7 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"enable_IG", &CanvasData::enable_IG},
         Field{"enable_ALS", &CanvasData::enable_ALS},
         Field{"enable_ARR", &CanvasData::enable_ARR},
-        Field{"order", &CanvasData::order},
+        Field{"order", &CanvasData::order_als},
         Field{"lambda", &CanvasData::lambda},
         Field{"sigma", &CanvasData::sigma},
     };

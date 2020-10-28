@@ -5,6 +5,7 @@
 #include <_deps/imgui/imgui.h>
 
 #include"../Fitting/fitting.h"
+#include "../Parametrization/parametrization.h"
 
 #include "spdlog/spdlog.h"
 
@@ -13,10 +14,10 @@ using namespace Ubpa;
 
 #define MAX_PLOT_NUM_POINTS 10000
 
-void plot_IP(ImVec2*, CanvasData*, int&, const ImVec2, float, float);
-void plot_IG(ImVec2*, CanvasData*, int&, const ImVec2, float, float, float);
-void plot_AL(ImVec2*, CanvasData*, int&, const ImVec2, float, float, int);
-void plot_AR(ImVec2*, CanvasData*, int&, const ImVec2, float, float, int, float);
+void plot_IP(ImVec2*, CanvasData*, int&, const ImVec2);
+void plot_IG(ImVec2*, CanvasData*, int&, const ImVec2, float);
+void plot_AL(ImVec2*, CanvasData*, int&, const ImVec2, int);
+void plot_AR(ImVec2*, CanvasData*, int&, const ImVec2, int, float);
 
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 	schedule.RegisterCommand([](Ubpa::UECS::World* w) {
@@ -35,10 +36,10 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImGui::Checkbox("Gauss", &data->enable_IG);
 			ImGui::SameLine(310);
 
-			ImGui::BeginChild("sigma_id",ImVec2(200,30));
-			ImGui::SliderFloat("sigma", &data->sigma, 1.0f, 100.0f);
+			ImGui::BeginChild("sigma_id", ImVec2(200, 30));
+			ImGui::SliderFloat("sigma", &data->sigma, 0.01f, 1.0f);
 			ImGui::EndChild();
-			
+
 			ImGui::Checkbox("Least Squares", &data->enable_ALS);
 			ImGui::SameLine(200);
 			ImGui::Checkbox("Ridge Regression", &data->enable_ARR);
@@ -52,11 +53,11 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImGui::InputInt("order_arr", &data->order_arr);
 			// to limit to the range 1-10
 			data->order_arr = data->order_arr < 1 ? 1 : data->order_arr;
-			data->order_arr = data->order_arr> 10 ? 10 : data->order_arr;
+			data->order_arr = data->order_arr > 10 ? 10 : data->order_arr;
 			ImGui::EndChild();
 			ImGui::SameLine(310);
 			ImGui::BeginChild("lambda_id", ImVec2(200, 30));
-			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 100.0f);
+			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 10.0f);
 			ImGui::EndChild();
 
 			// Typically you would use a BeginChild()/EndChild() pair to benefit from a clipping region + own scrolling.
@@ -91,14 +92,12 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			const pointf2 mouse_pos_in_canvas(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
 
 			// Add first and second point
-			if (!io.KeyCtrl && is_hovered && !data->adding_line && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-			{
+			if (!io.KeyCtrl && is_hovered && !data->adding_line && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 				data->points.push_back(mouse_pos_in_canvas);
 				data->points.push_back(mouse_pos_in_canvas);
 				data->adding_line = true;
 			}
-			if (data->adding_line)
-			{
+			if (data->adding_line) {
 				data->points.back() = mouse_pos_in_canvas;
 				if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
 					data->adding_line = false;
@@ -108,8 +107,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			// Pan (we use a zero mouse threshold when there's no context menu)
 			// You may decide to make that threshold dynamic based on whether the mouse is hovering something etc.
 			const float mouse_threshold_for_pan = data->opt_enable_context_menu ? -1.0f : 0.0f;
-			if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Right, mouse_threshold_for_pan))
-			{
+			if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Right, mouse_threshold_for_pan)) {
 				data->scrolling[0] += io.MouseDelta.x;
 				data->scrolling[1] += io.MouseDelta.y;
 			}
@@ -118,8 +116,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
 			if (data->opt_enable_context_menu && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && drag_delta.x == 0.0f && drag_delta.y == 0.0f)
 				ImGui::OpenPopupContextItem("context");
-			if (ImGui::BeginPopup("context"))
-			{
+			if (ImGui::BeginPopup("context")) {
 				if (data->adding_line)
 					data->points.resize(data->points.size() - 2);
 				data->adding_line = false;
@@ -130,8 +127,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 
 			// Draw grid + all lines in the canvas
 			draw_list->PushClipRect(canvas_p0, canvas_p1, true);
-			if (data->opt_enable_grid)
-			{
+			if (data->opt_enable_grid) {
 				const float GRID_STEP = 64.0f;
 				for (float x = fmodf(data->scrolling[0], GRID_STEP); x < canvas_sz.x; x += GRID_STEP)
 					draw_list->AddLine(ImVec2(canvas_p0.x + x, canvas_p0.y), ImVec2(canvas_p0.x + x, canvas_p1.y), IM_COL32(200, 200, 200, 40));
@@ -142,10 +138,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				draw_list->AddLine(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), ImVec2(origin.x + data->points[n + 1][0], origin.y + data->points[n + 1][1]), IM_COL32(255, 255, 0, 255), 2.0f);
 
 
-			for (int n = 0; n < data->points.size(); n += 2)
-			{
-				if (data->points[n][0] == data->points[n + 1][0] && data->points[n][1] == data->points[n + 1][1])
-				{
+			for (int n = 0; n < data->points.size(); n += 2) {
+				if (data->points[n][0] == data->points[n + 1][0] && data->points[n][1] == data->points[n + 1][1]) {
 					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 8, IM_COL32(255, 255, 255, 255));
 				}
 			}
@@ -156,7 +150,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_IP) {
 					int p_index = 0;
 					ImVec2 IP[MAX_PLOT_NUM_POINTS];
-					plot_IP(IP, data, p_index, origin, canvas_p0.x, canvas_p1.x);
+					plot_IP(IP, data, p_index, origin);
 					draw_list->AddPolyline(IP, p_index, IM_COL32(0, 255, 0, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20), IM_COL32(255, 255, 255, 255), "Lagrange");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13), IM_COL32(0, 255, 0, 255), 2.0f);
@@ -166,7 +160,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_IG) {
 					int p_index = 0;
 					ImVec2 IG[MAX_PLOT_NUM_POINTS];
-					plot_IG(IG, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->sigma);
+					plot_IG(IG, data, p_index, origin, data->sigma);
 					draw_list->AddPolyline(IG, p_index, IM_COL32(0, 255, 255, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - data->enable_IP * 20), IM_COL32(255, 255, 255, 255), "Gauss Base");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - data->enable_IP * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - data->enable_IP * 20), IM_COL32(0, 255, 255, 255), 2.0f);
@@ -176,9 +170,9 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_ALS) {
 					int p_index = 0;
 					ImVec2 AL[MAX_PLOT_NUM_POINTS];
-					plot_AL(AL, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order_als);
+					plot_AL(AL, data, p_index, origin, data->order_als);
 					draw_list->AddPolyline(AL, p_index, IM_COL32(217, 84, 19, 255), false, 2.0f);
-					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP+data->enable_IG) * 20), IM_COL32(255, 255, 255, 255), "Least Square");
+					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(255, 255, 255, 255), "Least Square");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(217, 84, 19, 255), 2.0f);
 				}
 
@@ -186,7 +180,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_ARR) {
 					int p_index = 0;
 					ImVec2 AR[MAX_PLOT_NUM_POINTS];
-					plot_AR(AR, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order_arr, data->lambda);
+					plot_AR(AR, data, p_index, origin, data->order_arr, data->lambda);
 					draw_list->AddPolyline(AR, p_index, IM_COL32(128, 91, 236, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(255, 255, 255, 255), "Ridge Regression");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(128, 91, 236, 255), 2.0f);
@@ -200,82 +194,118 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 }
 
 
-void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right)
-{
+void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
+
+	//parametrization
+	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+
+	std::vector<Ubpa::pointf2> tx, ty;
+	for (int i = 0; i < points.size(); ++i) {
+		tx.push_back(Ubpa::pointf2(t[i], points[i][0]));
+		ty.push_back(Ubpa::pointf2(t[i], points[i][1]));
+	}
 
 	// Interpolation: Polynomial Base Function
-	Eigen::VectorXf coefficients_IP = Fitting::Interpolation_PolynomialBaseFunction(points);
+	Eigen::VectorXf coefficients_IP_x = Fitting::Interpolation_PolynomialBaseFunction(tx);
+	Eigen::VectorXf coefficients_IP_y = Fitting::Interpolation_PolynomialBaseFunction(ty);
 
-	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
-		float fx = 0;
-		for (int j = 0; j < coefficients_IP.size(); ++j)
-			fx += coefficients_IP[j] * pow(x, j);
-		p[p_index++] = ImVec2(x, fx);
+	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
+		float fx = 0, fy = 0;
+		for (int j = 0; j < coefficients_IP_x.size(); ++j) {
+			fx += coefficients_IP_x[j] * pow(t_i, j);
+			fy += coefficients_IP_y[j] * pow(t_i, j);
+		}
+		p[p_index++] = ImVec2(fx, fy);
 	}
 }
 
-void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, float sigma = 1.0f)
-{
+void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float sigma = 1.0f) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
+
+	//parametrization
+	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+
+	std::vector<Ubpa::pointf2> tx, ty;
+	for (int i = 0; i < points.size(); ++i) {
+		tx.push_back(Ubpa::pointf2(t[i], points[i][0]));
+		ty.push_back(Ubpa::pointf2(t[i], points[i][1]));
+	}
 
 	// Interpolation: Gauss Base Function
-	Eigen::VectorXf coefficients_IG = Fitting::Interpolation_GaussBaseFunction(points, sigma);
+	Eigen::VectorXf coefficients_IG_x = Fitting::Interpolation_GaussBaseFunction(tx, sigma);
+	Eigen::VectorXf coefficients_IG_y = Fitting::Interpolation_GaussBaseFunction(ty, sigma);
 
-	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
-		float fx = coefficients_IG[0];
-		for (int j = 1; j < coefficients_IG.size(); ++j)
-			fx += coefficients_IG[j] * expf(-(x - points[j - 1][0]) * (x - points[j - 1][0]) / (2 * sigma * sigma));
-		p[p_index++] = ImVec2(x, fx);
+	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
+		float fx = coefficients_IG_x[0], fy = coefficients_IG_y[0];
+		for (int j = 1; j < coefficients_IG_x.size(); ++j) {
+			fx += coefficients_IG_x[j] * expf(-(t_i - t[j - 1]) * (t_i - t[j - 1]) / (2 * sigma * sigma));
+			fy += coefficients_IG_y[j] * expf(-(t_i - t[j - 1]) * (t_i - t[j - 1]) / (2 * sigma * sigma));
+		}
+		p[p_index++] = ImVec2(fx, fy);
 	}
 }
 
-void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, int order = 1)
-{
+void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int order = 1) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
+
+	//parametrization
+	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
+
+	std::vector<Ubpa::pointf2> tx, ty;
+	for (int i = 0; i < points.size(); ++i) {
+		tx.push_back(Ubpa::pointf2(t[i], points[i][0]));
+		ty.push_back(Ubpa::pointf2(t[i], points[i][1]));
+	}
 
 	// Approximation: Least Square
-	Eigen::VectorXf coefficients_AL = Fitting::Approximation_LeastSquare(points, order);
+	Eigen::VectorXf coefficients_AL_x = Fitting::Approximation_LeastSquare(tx, order);
+	Eigen::VectorXf coefficients_AL_y = Fitting::Approximation_LeastSquare(ty, order);
 
-	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
-		float fx = 0;
-		for (int j = 0; j < coefficients_AL.size(); ++j)
-			fx += coefficients_AL[j] * pow(x, j);
-		p[p_index++] = ImVec2(x, fx);
+	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
+		float fx = 0, fy = 0;
+		for (int j = 0; j < coefficients_AL_x.size(); ++j) {
+			fx += coefficients_AL_x[j] * pow(t_i, j);
+			fy += coefficients_AL_y[j] * pow(t_i, j);
+		}
+		p[p_index++] = ImVec2(fx, fy);
 	}
 }
 
-void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, float x_left, float x_right, int order = 1, float lambda = 0.2f)
-{
+void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int order = 1, float lambda = 0.2f) {
 	std::vector<Ubpa::pointf2> points;
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
 
-	// Approximation: Ridge Regression
-	Eigen::VectorXf coefficients_AR = Fitting::Approximation_RidgeRegression(points, order, lambda);
+	//parametrization
+	Eigen::VectorXf t = Parametrization::centripetalParameterization(points);
 
-	float x_step = (x_right - x_left) / (MAX_PLOT_NUM_POINTS);
+	std::vector<Ubpa::pointf2> tx, ty;
+	for (int i = 0; i < points.size(); ++i) {
+		tx.push_back(Ubpa::pointf2(t[i], points[i][0]));
+		ty.push_back(Ubpa::pointf2(t[i], points[i][1]));
+	}
+
+	// Approximation: Ridge Regression
+	Eigen::VectorXf coefficients_AR_x = Fitting::Approximation_RidgeRegression(tx, order, lambda);
+	Eigen::VectorXf coefficients_AR_y = Fitting::Approximation_RidgeRegression(ty, order, lambda);
+
 	p_index = 0;
-	for (float x = x_left; x < x_right && p_index < MAX_PLOT_NUM_POINTS; x += x_step)
-	{
-		float fx = 0;
-		for (int j = 0; j < coefficients_AR.size(); ++j)
-			fx += coefficients_AR[j] * pow(x, j);
-		p[p_index++] = ImVec2(x, fx);
+	for (float t_i = 0; t_i <= 1 && p_index < MAX_PLOT_NUM_POINTS; t_i += 0.001) {
+		float fx = 0, fy = 0;
+		for (int j = 0; j < coefficients_AR_x.size(); ++j) {
+			fx += coefficients_AR_x[j] * pow(t_i, j);
+			fy += coefficients_AR_y[j] * pow(t_i, j);
+		}
+		p[p_index++] = ImVec2(fx, fy);
 	}
 }

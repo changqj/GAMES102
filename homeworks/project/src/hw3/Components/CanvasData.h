@@ -16,7 +16,7 @@ struct CanvasData {
 
 	int order_als = 1;
 	float lambda = 1.0f;
-	float sigma = 2.0f;
+	float sigma = 0.1f;
 	int order_arr = 1;
 };
 

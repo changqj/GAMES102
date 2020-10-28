@@ -14,7 +14,7 @@ struct CanvasData {
 	bool enable_ALS{ true };
 	bool enable_ARR{ true };
 
-	int order = 1;
+	int order_als = 1;
 	float lambda = 1.0f;
 	float sigma = 2.0f;
 };

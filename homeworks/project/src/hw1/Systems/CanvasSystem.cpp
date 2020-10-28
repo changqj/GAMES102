@@ -41,7 +41,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImGui::Checkbox("Least Squares", &data->enable_ALS);
 			ImGui::SameLine(200);
 			ImGui::Checkbox("Ridge Regression", &data->enable_ARR);
-			ImGui::SliderInt("order", &data->order, 1, 10);
+			ImGui::SliderInt("order", &data->order_als, 1, 10);
 			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 100.0f);
 
 			// Typically you would use a BeginChild()/EndChild() pair to benefit from a clipping region + own scrolling.
@@ -161,7 +161,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_ALS) {
 					int p_index = 0;
 					ImVec2 AL[MAX_PLOT_NUM_POINTS];
-					plot_AL(AL, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order);
+					plot_AL(AL, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order_als);
 					draw_list->AddPolyline(AL, p_index, IM_COL32(217, 84, 19, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP+data->enable_IG) * 20), IM_COL32(255, 255, 255, 255), "Least Square");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG) * 20), IM_COL32(217, 84, 19, 255), 2.0f);
@@ -171,7 +171,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				if (data->enable_ARR) {
 					int p_index = 0;
 					ImVec2 AR[MAX_PLOT_NUM_POINTS];
-					plot_AR(AR, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order, data->lambda);
+					plot_AR(AR, data, p_index, origin, canvas_p0.x, canvas_p1.x, data->order_als, data->lambda);
 					draw_list->AddPolyline(AR, p_index, IM_COL32(128, 91, 236, 255), false, 2.0f);
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(255, 255, 255, 255), "Ridge Regression");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(128, 91, 236, 255), 2.0f);
