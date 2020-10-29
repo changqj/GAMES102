@@ -94,7 +94,10 @@ namespace Parametrization {
 		}
 		
 		for (int i = 1; i < n - 1; ++i) {
-			alpha[i] = std::min(PI - acos((points[i] - points[i - 1]).dot(points[i + 1] - points[i]) / (dist[i - 1] * dist[i])), PI / 2);
+			float cosvalue = (points[i - 1] - points[i]).cos_theta(points[i + 1] - points[i]);
+			cosvalue = std::min(cosvalue, 1.0f);
+			cosvalue = std::max(cosvalue, -1.0f);
+			alpha[i] = std::min(PI - acos(cosvalue), PI / 2);
 		}
 
 		y[1] = dist[0] * (1 + 1.5 * alpha[1] * dist[1] / (dist[0] + dist[1]));

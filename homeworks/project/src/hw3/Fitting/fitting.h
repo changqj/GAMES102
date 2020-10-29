@@ -14,7 +14,8 @@ namespace Fitting {
 				normal_equation(i, j) = powf((points[i][0]), j);
 			y(i) = points[i][1];
 		}
-		return normal_equation.inverse() * y;
+		//return normal_equation.inverse() * y;
+		return normal_equation.colPivHouseholderQr().solve(y);
 	}
 
 	float GaussBaseFunction(float x, float xi, float sigma) {
@@ -35,8 +36,8 @@ namespace Fitting {
 			y(i) = points[i][1];
 		}
 
-		//return normal_equation.colPivHouseholderQr().solve(y);
-		return normal_equation.inverse() * y;
+		return normal_equation.colPivHouseholderQr().solve(y);
+		//return normal_equation.inverse() * y;
 	}
 
 	Eigen::VectorXf Approximation_LeastSquare(std::vector<Ubpa::pointf2> points, int order = 3) {
@@ -52,8 +53,8 @@ namespace Fitting {
 			y(i) = points[i][1];
 		}
 
-		//return (normal_equation.transpose() * normal_equation).colPivHouseholderQr().solve(normal_equation.transpose() * y);
-		return (normal_equation.transpose() * normal_equation).inverse() * (normal_equation.transpose() * y);
+		return (normal_equation.transpose() * normal_equation).colPivHouseholderQr().solve(normal_equation.transpose() * y);
+		//return (normal_equation.transpose() * normal_equation).inverse() * (normal_equation.transpose() * y);
 	}
 
 	Eigen::VectorXf Approximation_RidgeRegression(std::vector<Ubpa::pointf2> points, int order = 3, float lambda = 0.5) {
@@ -70,7 +71,7 @@ namespace Fitting {
 		}
 		Eigen::MatrixXf I;
 		I.setIdentity(order + 1, order + 1);
-		//return (normal_equation.transpose() * normal_equation + I * lambda).colPivHouseholderQr().solve(normal_equation.transpose() * y);
-		return (normal_equation.transpose() * normal_equation + I * lambda).inverse() * (normal_equation.transpose() * y);
+		return (normal_equation.transpose() * normal_equation + I * lambda).colPivHouseholderQr().solve(normal_equation.transpose() * y);
+		//return (normal_equation.transpose() * normal_equation + I * lambda).inverse() * (normal_equation.transpose() * y);
 	}
 }

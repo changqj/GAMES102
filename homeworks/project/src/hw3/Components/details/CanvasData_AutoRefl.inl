@@ -25,6 +25,8 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"sigma", &CanvasData::sigma},
         Field{"order_arr", &CanvasData::order_arr},
         Field{"parametrizationType", &CanvasData::parametrizationType},
+        Field{"importData", &CanvasData::importData},
+        Field{"exportData", &CanvasData::exportData},
     };
 };
 

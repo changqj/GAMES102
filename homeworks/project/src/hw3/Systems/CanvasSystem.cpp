@@ -3,11 +3,14 @@
 #include "../Components/CanvasData.h"
 
 #include <_deps/imgui/imgui.h>
+#include "../ImGuiFileBrowser.h"
 
 #include"../Fitting/fitting.h"
 #include "../Parametrization/parametrization.h"
 
 #include "spdlog/spdlog.h"
+
+#include <fstream>
 
 
 using namespace Ubpa;
@@ -18,8 +21,12 @@ void plot_IP(ImVec2*, CanvasData*, int&, const ImVec2, int);
 void plot_IG(ImVec2*, CanvasData*, int&, const ImVec2, float, int);
 void plot_AL(ImVec2*, CanvasData*, int&, const ImVec2, int, int);
 void plot_AR(ImVec2*, CanvasData*, int&, const ImVec2, int, float, int);
+imgui_addons::ImGuiFileBrowser file_dialog;
 
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
+	spdlog::set_pattern("[%H:%M:%S] %v");
+	//spdlog::set_pattern("%+"); // back to default format
+
 	schedule.RegisterCommand([](Ubpa::UECS::World* w) {
 		auto data = w->entityMngr.GetSingleton<CanvasData>();
 
@@ -27,16 +34,33 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			return;
 
 		if (ImGui::Begin("Canvas")) {
+			if (ImGui::CollapsingHeader("File")) {
+				if (ImGui::MenuItem("Import data", "Ctrl+O")) { data->importData = true; }
+				if (ImGui::MenuItem("Export data", "Ctrl+S")) { data->exportData = true; }
+			}
+			//ImGui::SameLine();
+			if (ImGui::CollapsingHeader("Help")) {
+				ImGui::Text("ABOUT THIS DEMO:");
+				ImGui::BulletText("GAMES-102");
+				ImGui::Separator();
+
+				ImGui::Text("USER GUIDE:");
+				ImGui::BulletText("Mouse Left: drag to add lines, click to add points.");
+				ImGui::BulletText("Mouse Right: drag to scroll, click for context menu.");
+				ImGui::Separator();
+				
+			}
+
 			ImGui::Checkbox("Enable grid", &data->opt_enable_grid); ImGui::SameLine(200);
 			ImGui::Checkbox("Enable context menu", &data->opt_enable_context_menu);
-			ImGui::Text("Mouse Left: drag to add lines, click to add points.\t Mouse Right: drag to scroll, click for context menu.");
-			ImGui::Separator();
 			
+			ImGui::Separator();
+
 			ImGui::Checkbox("Lagrange", &data->enable_IP); ImGui::SameLine(200);
 			ImGui::Checkbox("Gauss", &data->enable_IG); ImGui::SameLine(310);
 
 			ImGui::BeginChild("sigma_id", ImVec2(200, 22));
-			ImGui::SliderFloat("sigma", &data->sigma, 0.01f, 1.0f);
+			ImGui::SliderFloat("sigma", &data->sigma, 0.01f, 1.0f, "sigma = %.3f");
 			ImGui::EndChild(); ImGui::SameLine(550);
 			ImGui::Text("Parametrization Type: ");
 
@@ -48,16 +72,16 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImGui::BeginChild("order_als_id", ImVec2(100, 22));
 			ImGui::InputInt("order_als", &data->order_als);
 			data->order_als = data->order_als < 1 ? 1 : data->order_als;
-			data->order_als = data->order_als > 10 ? 10 : data->order_als;
+			data->order_als = data->order_als > 50 ? 50 : data->order_als;
 			ImGui::EndChild(); ImGui::SameLine(200);
 			ImGui::BeginChild("order_arr_id", ImVec2(100, 22));
 			ImGui::InputInt("order_arr", &data->order_arr);
 			// to limit to the range 1-10
 			data->order_arr = data->order_arr < 1 ? 1 : data->order_arr;
-			data->order_arr = data->order_arr > 10 ? 10 : data->order_arr;
+			data->order_arr = data->order_arr > 50 ? 50 : data->order_arr;
 			ImGui::EndChild(); ImGui::SameLine(310);
 			ImGui::BeginChild("lambda_id", ImVec2(200, 22));
-			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 10.0f);
+			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 10.0f, "lambda = %.3f");
 			ImGui::EndChild(); ImGui::SameLine(550);
 			ImGui::RadioButton("uniform", &data->parametrizationType, 2); ImGui::SameLine(630);
 			ImGui::RadioButton("Foley", &data->parametrizationType, 3);
@@ -94,7 +118,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			const pointf2 mouse_pos_in_canvas(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
 
 			// Add first and second point
-			if (!io.KeyCtrl && is_hovered && !data->adding_line && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+			if (is_hovered && !data->adding_line && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 				data->points.push_back(mouse_pos_in_canvas);
 				data->points.push_back(mouse_pos_in_canvas);
 				data->adding_line = true;
@@ -105,6 +129,55 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					data->adding_line = false;
 				spdlog::info("Point added at: {}, {}", data->points.back()[0], data->points.back()[1]);
 			}
+
+			if (data->importData || (io.KeyCtrl && ImGui::IsKeyPressed(79))) {
+				ImGui::OpenPopup("Import Data");
+				data->importData = false;
+			}
+			if (data->exportData || (io.KeyCtrl && ImGui::IsKeyPressed(83))) {
+				ImGui::OpenPopup("Export Data");
+				data->exportData = false;
+			}
+
+			if (file_dialog.showFileDialog("Import Data", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".txt,.xy,.*")) {
+				data->points.clear();
+				std::ifstream in(file_dialog.selected_path);
+				float x, y;
+				while (in >> x >> y) {
+					data->points.push_back(ImVec2(x, y));
+					data->points.push_back(ImVec2(x, y));
+				}
+
+				spdlog::info(file_dialog.selected_path);
+			}
+
+
+			if (file_dialog.showFileDialog("Export Data", imgui_addons::ImGuiFileBrowser::DialogMode::SAVE, ImVec2(700, 310), ".txt,.xy,.*")) {
+				std::ofstream out(file_dialog.selected_path);
+				
+				for (int n = 0; n < data->points.size(); n += 2)
+					out << data->points[n][0] << "\t" << data->points[n][1] << std::endl;
+
+				spdlog::info(file_dialog.selected_path);
+			}
+
+			if (io.KeyCtrl && ImGui::IsKeyPressed(38)) { data->sigma += 0.001; }	// 按下键盘 Ctrl+↑
+			if (io.KeyCtrl && ImGui::IsKeyPressed(40)) { data->sigma -= 0.001; }	// 按下键盘 Ctrl+↓
+
+			if (io.KeyShift && ImGui::IsKeyPressed(38)) { data->lambda += 0.001; }	// 按下键盘 Shift+↑
+			if (io.KeyShift && ImGui::IsKeyPressed(40)) { data->lambda -= 0.001; }	// 按下键盘 Shift+↓
+
+			if (io.KeyAlt && ImGui::IsKeyPressed(38)) { data->order_als++; data->order_arr++; }	// 按下键盘 Alt+↑
+			if (io.KeyAlt && ImGui::IsKeyPressed(40)) { data->order_als--; data->order_arr--; }	// 按下键盘 Alt+↓
+
+			if (io.KeyAlt && ImGui::IsKeyPressed(80)) { data->enable_IP = !data->enable_IP; }	// 按下键盘 Alt+P
+			if (io.KeyAlt && ImGui::IsKeyPressed(71)) { data->enable_IG = !data->enable_IG; }	// 按下键盘 Alt+G
+			if (io.KeyAlt && ImGui::IsKeyPressed(76)) { data->enable_ALS = !data->enable_ALS; }	// 按下键盘 Alt+L
+			if (io.KeyAlt && ImGui::IsKeyPressed(82)) { data->enable_ARR = !data->enable_ARR; }	// 按下键盘 Alt+R
+
+			if (ImGui::IsKeyPressed(9)) { ++data->parametrizationType %= 4; }	// 按下键盘 Tab
+
+
 
 			// Pan (we use a zero mouse threshold when there's no context menu)
 			// You may decide to make that threshold dynamic based on whether the mouse is hovering something etc.
@@ -142,7 +215,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 
 			for (int n = 0; n < data->points.size(); n += 2) {
 				if (data->points[n][0] == data->points[n + 1][0] && data->points[n][1] == data->points[n + 1][1]) {
-					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 8, IM_COL32(255, 255, 255, 255));
+					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 2, IM_COL32(255, 255, 255, 255));
 				}
 			}
 			draw_list->PopClipRect();
@@ -191,10 +264,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 		}
 		ImGui::End();
 	});
-
-
 }
-
 
 void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int parametrizationType) {
 	std::vector<Ubpa::pointf2> points;
