@@ -92,6 +92,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImGui::EndChild(); ImGui::SameLine(290);
 			ImGui::BeginChild("lambda_id", ImVec2(200, 22));
 			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 10.0f, "lambda = %.3f");
+			data->lambda = data->lambda < 0 ? 0 : data->lambda;
 			ImGui::EndChild(); ImGui::SameLine(530);
 			ImGui::BeginChild("step_id", ImVec2(200, 22)); 
 			ImGui::SliderInt("step", &data->step_num, 5001, 50001, "step_num = %d");
