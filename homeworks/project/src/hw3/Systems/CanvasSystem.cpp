@@ -64,6 +64,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			ImGui::SliderFloat("sigma", &data->sigma, 0.01f, 1.0f, "sigma = %.3f");
 			ImGui::EndChild(); ImGui::SameLine(530);
 			ImGui::Checkbox("RBF", &data->enable_RBF), ImGui::SameLine();
+			if (ImGui::Button("Re")) { data->python_interpreter = ""; } ImGui::SameLine();
 			ImGui::BeginChild("layer_rbf_id", ImVec2(100, 22));
 			ImGui::InputInt("layer", &data->layer);
 			data->layer = data->layer < 2 ? 2 : data->layer;
