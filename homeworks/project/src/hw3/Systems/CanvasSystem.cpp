@@ -21,6 +21,7 @@ void plot_IP(ImVec2*, CanvasData*, int&, const ImVec2, int);
 void plot_IG(ImVec2*, CanvasData*, int&, const ImVec2, float, int);
 void plot_AL(ImVec2*, CanvasData*, int&, const ImVec2, int, int);
 void plot_AR(ImVec2*, CanvasData*, int&, const ImVec2, int, float, int);
+Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2>, int);
 imgui_addons::ImGuiFileBrowser file_dialog;
 
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
@@ -56,34 +57,46 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			
 			ImGui::Separator();
 
-			ImGui::Checkbox("Lagrange", &data->enable_IP); ImGui::SameLine(200);
-			ImGui::Checkbox("Gauss", &data->enable_IG); ImGui::SameLine(310);
+			ImGui::Checkbox("Lagrange", &data->enable_IP); ImGui::SameLine(180);
+			ImGui::Checkbox("Gauss", &data->enable_IG); ImGui::SameLine(290);
 
 			ImGui::BeginChild("sigma_id", ImVec2(200, 22));
 			ImGui::SliderFloat("sigma", &data->sigma, 0.01f, 1.0f, "sigma = %.3f");
-			ImGui::EndChild(); ImGui::SameLine(550);
+			ImGui::EndChild(); ImGui::SameLine(530);
+			ImGui::Checkbox("RBF", &data->enable_RBF), ImGui::SameLine();
+			ImGui::BeginChild("layer_rbf_id", ImVec2(100, 22));
+			ImGui::InputInt("layer", &data->layer);
+			data->layer = data->layer < 2 ? 2 : data->layer;
+			data->layer = data->layer > 50 ? 50 : data->layer;
+			ImGui::EndChild(); ImGui::SameLine(750);
 			ImGui::Text("Parametrization Type: ");
 
-			ImGui::Checkbox("Least Squares", &data->enable_ALS); ImGui::SameLine(200);
-			ImGui::Checkbox("Ridge Regression", &data->enable_ARR); ImGui::SameLine(550);
-			ImGui::RadioButton("chord", &data->parametrizationType, 0); ImGui::SameLine(630);
+			ImGui::Checkbox("Least Squares", &data->enable_ALS); ImGui::SameLine(180);
+			ImGui::Checkbox("Ridge Regression", &data->enable_ARR); ImGui::SameLine(530);
+			ImGui::BeginChild("learning_rate_id", ImVec2(200, 22));
+			ImGui::SliderFloat("rate", &data->learning_rate, 0.0001f, 1.0f, "rate = %.4f");
+			ImGui::EndChild(); ImGui::SameLine(750);
+			ImGui::RadioButton("chord", &data->parametrizationType, 0); ImGui::SameLine(830);
 			ImGui::RadioButton("centripetal", &data->parametrizationType, 1);
 
 			ImGui::BeginChild("order_als_id", ImVec2(100, 22));
 			ImGui::InputInt("order_als", &data->order_als);
 			data->order_als = data->order_als < 1 ? 1 : data->order_als;
 			data->order_als = data->order_als > 50 ? 50 : data->order_als;
-			ImGui::EndChild(); ImGui::SameLine(200);
+			ImGui::EndChild(); ImGui::SameLine(180);
 			ImGui::BeginChild("order_arr_id", ImVec2(100, 22));
 			ImGui::InputInt("order_arr", &data->order_arr);
 			// to limit to the range 1-10
 			data->order_arr = data->order_arr < 1 ? 1 : data->order_arr;
 			data->order_arr = data->order_arr > 50 ? 50 : data->order_arr;
-			ImGui::EndChild(); ImGui::SameLine(310);
+			ImGui::EndChild(); ImGui::SameLine(290);
 			ImGui::BeginChild("lambda_id", ImVec2(200, 22));
 			ImGui::SliderFloat("lambda", &data->lambda, 0.0f, 10.0f, "lambda = %.3f");
-			ImGui::EndChild(); ImGui::SameLine(550);
-			ImGui::RadioButton("uniform", &data->parametrizationType, 2); ImGui::SameLine(630);
+			ImGui::EndChild(); ImGui::SameLine(530);
+			ImGui::BeginChild("step_id", ImVec2(200, 22)); 
+			ImGui::SliderInt("step", &data->step_num, 5001, 50001, "step_num = %d");
+			ImGui::EndChild(); ImGui::SameLine(750);
+			ImGui::RadioButton("uniform", &data->parametrizationType, 2); ImGui::SameLine(830);
 			ImGui::RadioButton("Foley", &data->parametrizationType, 3);
 
 			// Typically you would use a BeginChild()/EndChild() pair to benefit from a clipping region + own scrolling.
@@ -161,6 +174,18 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				spdlog::info(file_dialog.selected_path);
 			}
 
+			if (data->enable_RBF && !strcmp(data->python_interpreter.c_str(),"")) {
+				ImGui::OpenPopup("Select python interpreter");
+				/*data->python_interpreter = "0";*/
+			}
+
+			// 如果没有选择python解释器 则选择
+			if (file_dialog.showFileDialog("Select python interpreter", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".exe")) {
+				data->python_interpreter = file_dialog.selected_path;
+				data->enable_RBF = true;
+				spdlog::info("python interpreter path:", file_dialog.selected_path);
+			}
+
 			if (io.KeyCtrl && ImGui::IsKeyPressed(38)) { data->sigma += 0.001; }	// 按下键盘 Ctrl+↑
 			if (io.KeyCtrl && ImGui::IsKeyPressed(40)) { data->sigma -= 0.001; }	// 按下键盘 Ctrl+↓
 
@@ -215,11 +240,11 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 
 			for (int n = 0; n < data->points.size(); n += 2) {
 				if (data->points[n][0] == data->points[n + 1][0] && data->points[n][1] == data->points[n + 1][1]) {
-					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 2, IM_COL32(255, 255, 255, 255));
+					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 4, IM_COL32(255, 255, 255, 255));
 				}
 			}
 			draw_list->PopClipRect();
-
+			if (data->points.size() <= 2) data->enable_RBF = false;
 			if (data->points.size() > 2) {
 				// IP
 				if (data->enable_IP) {
@@ -260,6 +285,30 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(255, 255, 255, 255), "Ridge Regression");
 					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (data->enable_IP + data->enable_IG + data->enable_ALS) * 20), IM_COL32(128, 91, 236, 255), 2.0f);
 				}
+
+				// RBF
+				if (data->enable_RBF) {
+					data->enable_RBF = false;
+					std::vector<Ubpa::pointf2> points;
+					for (int n = 0; n < data->points.size(); n += 2)
+						points.push_back(data->points[n] + origin);
+					Eigen::VectorXf t = parametrization(points, data->parametrizationType);
+					std::ofstream outrbf_x("tx.txt");
+					std::ofstream outrbf_y("ty.txt");
+					for (int n = 0; n < points.size(); ++n) {
+						outrbf_x << t[n] << "\t" << points[n][0] << std::endl;
+						outrbf_y << t[n] << "\t" << points[n][1] << std::endl;
+					}
+					if (strcmp(data->python_interpreter.c_str(), "")) {
+						std::string cmd = " ../src/hw3/RBF.py";
+						std::ostringstream fullcmd;
+						fullcmd << data->python_interpreter << cmd << " " << data->learning_rate << " " << data->step_num << " " << data->layer;
+						system(fullcmd.str().c_str());
+						spdlog::info("delete");
+						std::ofstream("tx.txt");
+						std::ofstream("ty.txt");
+					}
+				}
 			}
 		}
 		ImGui::End();
@@ -272,23 +321,7 @@ void plot_IP(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t;
-	switch (parametrizationType) {
-	case 0:
-		t = Parametrization::chordParameterization(points);
-		break;
-	case 1:
-		t = Parametrization::centripetalParameterization(points);
-		break;
-	case 2:
-		t = Parametrization::uniformParameterization(points.size());
-		break;
-	case 3:
-		t = Parametrization::FoleyParameterization(points);
-		break;
-	default:
-		t = Parametrization::chordParameterization(points);
-	}
+	Eigen::VectorXf t = parametrization(points, parametrizationType);
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -316,24 +349,7 @@ void plot_IG(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, flo
 	for (int n = 0; n < data->points.size(); n += 2)
 		points.push_back(data->points[n] + origin);
 
-	//parametrization
-	Eigen::VectorXf t;
-	switch (parametrizationType) {
-	case 0:
-		t = Parametrization::chordParameterization(points);
-		break;
-	case 1:
-		t = Parametrization::centripetalParameterization(points);
-		break;
-	case 2:
-		t = Parametrization::uniformParameterization(points.size());
-		break;
-	case 3:
-		t = Parametrization::FoleyParameterization(points);
-		break;
-	default:
-		t = Parametrization::chordParameterization(points);
-	}
+	Eigen::VectorXf t = parametrization(points, parametrizationType);
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -362,23 +378,7 @@ void plot_AL(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t;
-	switch (parametrizationType) {
-	case 0:
-		t = Parametrization::chordParameterization(points);
-		break;
-	case 1:
-		t = Parametrization::centripetalParameterization(points);
-		break;
-	case 2:
-		t = Parametrization::uniformParameterization(points.size());
-		break;
-	case 3:
-		t = Parametrization::FoleyParameterization(points);
-		break;
-	default:
-		t = Parametrization::chordParameterization(points);
-	}
+	Eigen::VectorXf t = parametrization(points, parametrizationType);
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -407,23 +407,7 @@ void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 		points.push_back(data->points[n] + origin);
 
 	//parametrization
-	Eigen::VectorXf t;
-	switch (parametrizationType) {
-	case 0:
-		t = Parametrization::chordParameterization(points);
-		break;
-	case 1:
-		t = Parametrization::centripetalParameterization(points);
-		break;
-	case 2:
-		t = Parametrization::uniformParameterization(points.size());
-		break;
-	case 3:
-		t = Parametrization::FoleyParameterization(points);
-		break;
-	default:
-		t = Parametrization::chordParameterization(points);
-	}
+	Eigen::VectorXf t = parametrization(points, parametrizationType);
 
 	std::vector<Ubpa::pointf2> tx, ty;
 	for (int i = 0; i < points.size(); ++i) {
@@ -443,5 +427,21 @@ void plot_AR(ImVec2* p, CanvasData* data, int& p_index, const ImVec2 origin, int
 			fy += coefficients_AR_y[j] * powf(t_i, j);
 		}
 		p[p_index++] = ImVec2(fx, fy);
+	}
+}
+
+Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametrizationType) {
+	//parametrization
+	switch (parametrizationType) {
+	case 0:
+		return Parametrization::chordParameterization(points);
+	case 1:
+		return Parametrization::centripetalParameterization(points);
+	case 2:
+		return Parametrization::uniformParameterization(points.size());
+	case 3:
+		return Parametrization::FoleyParameterization(points);
+	default:
+		return Parametrization::chordParameterization(points);
 	}
 }

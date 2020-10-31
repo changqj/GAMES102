@@ -14,6 +14,11 @@ struct CanvasData {
 	bool enable_ALS{ true };
 	bool enable_ARR{ false };
 
+	bool enable_RBF{ false };
+	int layer = 10;
+	float learning_rate = 0.002f;
+	int step_num = 10001;
+
 	int order_als = 1;
 	float lambda = 1.0f;
 	float sigma = 0.1f;
@@ -24,6 +29,7 @@ struct CanvasData {
 	bool importData{ false };
 	bool exportData{ false };
 
+	std::string python_interpreter = "";
 };
 
 #include "details/CanvasData_AutoRefl.inl"

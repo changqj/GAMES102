@@ -21,15 +21,11 @@ namespace Parametrization {
 	/// @attention  
 	*/
 	Eigen::VectorXf chordParameterization(std::vector<Ubpa::pointf2> points) {
-
 		int n = points.size();
 		Eigen::VectorXf y = Eigen::VectorXf::Zero(n);
-
 		for (int i = 1; i < n; ++i)
 			y[i] = y[i - 1] + (points[i] - points[i - 1]).norm();
-
-		y = y / y[n - 1];
-
+		y /= y[n - 1];
 		return y;
 	}
 
@@ -43,12 +39,9 @@ namespace Parametrization {
 	Eigen::VectorXf centripetalParameterization(std::vector<Ubpa::pointf2> points) {
 		int n = points.size();
 		Eigen::VectorXf y = Eigen::VectorXf::Zero(n);
-
 		for (int i = 1; i < n; ++i)
 			y[i] = y[i - 1] + sqrt((points[i] - points[i - 1]).norm());
-
-		y = y / y[n - 1];
-
+		y /= y[n - 1];
 		return y;
 	}
 
@@ -60,13 +53,10 @@ namespace Parametrization {
 	/// @attention  
 	*/
 	Eigen::VectorXf uniformParameterization(int numOfPoints) {
-
 		Eigen::VectorXf y = Eigen::VectorXf::Zero(numOfPoints);
-
 		for (int i = 0; i < numOfPoints; ++i)
 			y[i] = i;
-
-		y = y / y[numOfPoints - 1];
+		y /= y[numOfPoints - 1];
 		return y;
 	}
 
@@ -81,35 +71,24 @@ namespace Parametrization {
 	Eigen::VectorXf FoleyParameterization(std::vector<Ubpa::pointf2> points) {
 		int n = points.size();
 		Eigen::VectorXf y = Eigen::VectorXf::Zero(n);
-		if (n == 2) {
-			y[1] = 1;
-			return y;
-		}
-
+		if (n == 2) { y[1] = 1; return y; }
 		Eigen::VectorXf dist = Eigen::VectorXf::Zero(n-1);
 		Eigen::VectorXf alpha = Eigen::VectorXf::Zero(n-1);
-
 		for (int i = 0; i < n - 1; ++i) {
 			dist[i] = (points[i + 1] - points[i]).norm();
 		}
-		
 		for (int i = 1; i < n - 1; ++i) {
 			float cosvalue = (points[i - 1] - points[i]).cos_theta(points[i + 1] - points[i]);
 			cosvalue = std::min(cosvalue, 1.0f);
 			cosvalue = std::max(cosvalue, -1.0f);
 			alpha[i] = std::min(PI - acos(cosvalue), PI / 2);
 		}
-
 		y[1] = dist[0] * (1 + 1.5 * alpha[1] * dist[1] / (dist[0] + dist[1]));
-
 		for (int i = 2; i < n - 1; ++i) {
 			y[i] = y[i - 1] + dist[i - 1] * (1 + 1.5 * alpha[i - 1] * dist[i - 2] / (dist[i - 2] + dist[i - 1]) + 1.5 * alpha[i] * dist[i] / (dist[i - 1] + dist[i]));
 		}
-
 		y[n - 1] = y[n - 2] + dist[n - 2] * (1 + 1.5 * alpha[n - 2] * dist[n - 3] / (dist[n - 3] + dist[n - 2]));
-
-		y = y / y[n - 1];
-
+		y /= y[n - 1];
 		return y;
 	}
 }

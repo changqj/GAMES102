@@ -20,6 +20,10 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"enable_IG", &CanvasData::enable_IG},
         Field{"enable_ALS", &CanvasData::enable_ALS},
         Field{"enable_ARR", &CanvasData::enable_ARR},
+        Field{"enable_RBF", &CanvasData::enable_RBF},
+        Field{"layer", &CanvasData::layer},
+        Field{"learning_rate", &CanvasData::learning_rate},
+        Field{"step_num", &CanvasData::step_num},
         Field{"order_als", &CanvasData::order_als},
         Field{"lambda", &CanvasData::lambda},
         Field{"sigma", &CanvasData::sigma},
@@ -27,6 +31,7 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"parametrizationType", &CanvasData::parametrizationType},
         Field{"importData", &CanvasData::importData},
         Field{"exportData", &CanvasData::exportData},
+        Field{"python_interpreter", &CanvasData::python_interpreter},
     };
 };
 
