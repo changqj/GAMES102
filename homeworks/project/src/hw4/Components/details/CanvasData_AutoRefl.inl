@@ -15,7 +15,10 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"scrolling", &CanvasData::scrolling},
         Field{"opt_enable_grid", &CanvasData::opt_enable_grid},
         Field{"opt_enable_context_menu", &CanvasData::opt_enable_context_menu},
-        Field{"adding_line", &CanvasData::adding_line},
+        Field{"parametrizationType", &CanvasData::parametrizationType},
+        Field{"importData", &CanvasData::importData},
+        Field{"exportData", &CanvasData::exportData},
+        Field{"isEnd", &CanvasData::isEnd},
     };
 };
 

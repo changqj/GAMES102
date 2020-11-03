@@ -50,9 +50,9 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				ImGui::BulletText("Mouse Right: drag to scroll, click for context menu.");
 				ImGui::BulletText("Ctrl+O: Import Data");
 				ImGui::BulletText("Ctrl+S: Export Data");
-				ImGui::BulletText("Ctrl+¡ü/¡ý: sigma += 0.001 / sigma -= 0.001");
-				ImGui::BulletText("Shift+¡ü/¡ý: lambda += 0.001 / lambda -= 0.001");
-				ImGui::BulletText("Alt+¡ü/¡ý: order++ / order--");
+				ImGui::BulletText("Ctrl+UP/DOWN: sigma += 0.001 / sigma -= 0.001");
+				ImGui::BulletText("Shift+UP/DOWN: lambda += 0.001 / lambda -= 0.001");
+				ImGui::BulletText("Alt+UP/DOWN: order++ / order--");
 				ImGui::BulletText("Alt+P: elect Lagrange method.");
 				ImGui::BulletText("Alt+G: select Gauss method.");
 				ImGui::BulletText("Alt+L: select least squares method.");
