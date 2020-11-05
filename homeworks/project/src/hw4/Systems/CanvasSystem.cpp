@@ -4,10 +4,9 @@
 
 #include <_deps/imgui/imgui.h>
 #include "../ImGuiFileBrowser.h"
-
 #include "../Parametrization/parametrization.h"
-
 #include "spdlog/spdlog.h"
+#include "../Curve/curve.h"
 
 #include <fstream>
 
@@ -16,8 +15,23 @@ using namespace Ubpa;
 
 constexpr auto MAX_PLOT_NUM_POINTS = 10000;
 
-Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2>, int);
 imgui_addons::ImGuiFileBrowser file_dialog;
+
+Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametrizationType) {
+	//parametrization
+	switch (parametrizationType) {
+	case 0:
+		return Parametrization::chordParameterization(points);
+	case 1:
+		return Parametrization::centripetalParameterization(points);
+	case 2:
+		return Parametrization::uniformParameterization(points.size());
+	case 3:
+		return Parametrization::FoleyParameterization(points);
+	default:
+		return Parametrization::chordParameterization(points);
+	}
+}
 
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 	spdlog::set_pattern("[%H:%M:%S] %v");
@@ -47,12 +61,12 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				ImGui::BulletText("Ctrl+S: Export Data");
 				ImGui::BulletText("Tab: change the parameterization method.");
 				ImGui::Separator();
-				
+
 			}
 
 			ImGui::Checkbox("Enable grid", &data->opt_enable_grid); ImGui::SameLine(200);
 			ImGui::Checkbox("Enable context menu", &data->opt_enable_context_menu);
-			
+
 			ImGui::Separator();
 
 			ImGui::Text("Parametrization Type: ");
@@ -87,13 +101,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			// add a point
 			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { data->isEnd = true; }	// 双击结束
 			if (is_hovered && !data->isEnd && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-				data->points.push_back(mouse_pos_in_canvas);
-				spdlog::info("Point added at: {}, {}", data->points.back()[0], data->points.back()[1]);
-			}
-
-			if (!data->isEnd && data->points.size()) {
-				// 计算曲线
-
+				data->ctrlPoints.push_back(CtrlPoint(mouse_pos_in_canvas));
+				spdlog::info("Point added at: {}, {}", data->ctrlPoints.back().point[0], data->ctrlPoints.back().point[1]);
 			}
 
 
@@ -107,12 +116,12 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			}
 
 			if (file_dialog.showFileDialog("Import Data", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".txt,.xy,.*")) {
-				data->points.clear();
+				data->ctrlPoints.clear();
 				std::ifstream in(file_dialog.selected_path);
 				float x, y;
 				while (in >> x >> y) {
-					data->points.push_back(ImVec2(x, y));
-					data->points.push_back(ImVec2(x, y));
+					data->ctrlPoints.push_back(CtrlPoint(ImVec2(x, y)));
+					data->ctrlPoints.push_back(CtrlPoint(ImVec2(x, y)));
 				}
 
 				spdlog::info(file_dialog.selected_path);
@@ -122,8 +131,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			if (file_dialog.showFileDialog("Export Data", imgui_addons::ImGuiFileBrowser::DialogMode::SAVE, ImVec2(700, 310), ".txt,.xy,.*")) {
 				std::ofstream out(file_dialog.selected_path);
 
-				for (int n = 0; n < data->points.size(); ++n)
-					out << data->points[n][0] << "\t" << data->points[n][1] << std::endl;
+				for (int n = 0; n < data->ctrlPoints.size(); ++n)
+					out << data->ctrlPoints[n].point[0] << "\t" << data->ctrlPoints[n].point[1] << std::endl;
 
 				spdlog::info(file_dialog.selected_path);
 			}
@@ -139,15 +148,15 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				data->scrolling[1] += io.MouseDelta.y;
 			}
 
-			if (!data->points.size()) { data->isEnd = false; }
+			if (!data->ctrlPoints.size()) { data->isEnd = false; }
 
 			// Context menu (under default mouse threshold)
 			ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
 			if (data->opt_enable_context_menu && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && drag_delta.x == 0.0f && drag_delta.y == 0.0f)
 				ImGui::OpenPopupContextItem("context");
 			if (ImGui::BeginPopup("context")) {
-				if (ImGui::MenuItem("Remove one", NULL, false, data->points.size() > 0)) { data->points.resize(data->points.size() - 1); }
-				if (ImGui::MenuItem("Remove all", NULL, false, data->points.size() > 0)) { data->points.clear(); }
+				if (ImGui::MenuItem("Remove one", NULL, false, data->ctrlPoints.size() > 0)) { data->ctrlPoints.resize(data->ctrlPoints.size() - 1); }
+				if (ImGui::MenuItem("Remove all", NULL, false, data->ctrlPoints.size() > 0)) { data->ctrlPoints.clear(); }
 				ImGui::EndPopup();
 			}
 
@@ -162,33 +171,34 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			}
 
 			// 画数据点
-			for (int n = 0; n < data->points.size(); ++n) {
-				draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 4, IM_COL32(255, 255, 255, 255));
+			for (int n = 0; n < data->ctrlPoints.size(); ++n) {
+				draw_list->AddCircleFilled(ImVec2(origin.x + data->ctrlPoints[n].point[0], origin.y + data->ctrlPoints[n].point[1]), 4, IM_COL32(255, 255, 255, 255));
+			}
+
+			if (!data->isEnd && data->ctrlPoints.size() > 2) {
+				// 计算曲线
+				ImVec2 BSP[MAX_PLOT_NUM_POINTS];
+				std::vector<Ubpa::pointf2> cpoints;
+				cpoints.clear();
+				for (int i = 0; i < data->ctrlPoints.size(); ++i) {
+					cpoints.push_back(data->ctrlPoints[i].point);
+				}
+				Eigen::VectorXf para = parametrization(cpoints, data->parametrizationType);
+				int p_index = 0;
+				for (int segment_idx = 0; segment_idx < cpoints.size() - 1; ++segment_idx) {
+					for (float t = para[segment_idx]; t <= para[segment_idx + 1] && p_index < MAX_PLOT_NUM_POINTS; t += 0.01) {
+						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx);
+						BSP[p_index++] = ImVec2(bs_point + origin);
+					}
+				}
+				draw_list->AddPolyline(BSP, p_index, IM_COL32(0, 255, 0, 255), false, 2.0f);
+			}
+			if (data->ctrlPoints.size() > 2) {
+
 			}
 			draw_list->PopClipRect();
-
-
-			if (data->points.size() > 2) {
-				
-			}
 		}
 		ImGui::End();
 	});
 }
 
-
-Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametrizationType) {
-	//parametrization
-	switch (parametrizationType) {
-	case 0:
-		return Parametrization::chordParameterization(points);
-	case 1:
-		return Parametrization::centripetalParameterization(points);
-	case 2:
-		return Parametrization::uniformParameterization(points.size());
-	case 3:
-		return Parametrization::FoleyParameterization(points);
-	default:
-		return Parametrization::chordParameterization(points);
-	}
-}

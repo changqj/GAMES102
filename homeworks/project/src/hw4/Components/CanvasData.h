@@ -2,8 +2,18 @@
 
 #include <UGM/UGM.h>
 
+struct CtrlPoint {
+	Ubpa::pointf2 point;
+	float leftDerivativeX = 0.0f;
+	float rightDerivativeX = 0.0f;
+	float leftDerivativeY = 0.0f;
+	float rightDerivativeY = 0.0f;
+	CtrlPoint(const Ubpa::pointf2 p) { point = p; }
+	CtrlPoint() { point = Ubpa::pointf2(); }
+};
+
 struct CanvasData {
-	std::vector<Ubpa::pointf2> points;	// 型值点的具体坐标x-y
+	std::vector<CtrlPoint> ctrlPoints;
 	Ubpa::valf2 scrolling{ 0.f,0.f };
 	bool opt_enable_grid{ true };
 	bool opt_enable_context_menu{ true };
@@ -14,13 +24,6 @@ struct CanvasData {
 	bool exportData{ false };
 
 	bool isEnd{ false };
-
-	std::vector<float> leftDerivativeX;		// x(t_i)的左导数
-	std::vector<float> rightDerivativeX;	// x(t_i)的右导数
-	std::vector<float> leftDerivativeY;		// y(t_i)的左导数
-	std::vector<float> rightDerivativeY;	// y(t_i)的右导数
-
 };
-
 
 #include "details/CanvasData_AutoRefl.inl"
