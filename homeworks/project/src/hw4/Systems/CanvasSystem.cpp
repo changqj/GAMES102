@@ -17,6 +17,12 @@ constexpr auto MAX_PLOT_NUM_POINTS = 10000;
 
 imgui_addons::ImGuiFileBrowser file_dialog;
 
+bool enable_edit = false;
+
+int selectedCtrlPoint = -1;
+
+float r = 5.0f;	// 方形点的半径
+
 Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametrizationType) {
 	//parametrization
 	switch (parametrizationType) {
@@ -105,7 +111,10 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				data->_mx.push_back(0.0f);
 				data->_my.push_back(0.0f);
 				spdlog::info("Point added at: {}, {}", data->ctrlPoints.back().point[0], data->ctrlPoints.back().point[1]);
+				spdlog::info(enable_edit);
 			}
+
+
 
 
 			if (data->importData || (io.KeyCtrl && ImGui::IsKeyPressed(79))) {
@@ -150,7 +159,10 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				data->scrolling[1] += io.MouseDelta.y;
 			}
 
-			if (!data->ctrlPoints.size()) { data->isEnd = false; }
+			if (!data->ctrlPoints.size()) {
+				data->isEnd = false;
+				enable_edit = false;
+			}
 
 			// Context menu (under default mouse threshold)
 			ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
@@ -167,6 +179,17 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					data->_mx.clear();
 					data->_my.clear();
 				}
+				if (ImGui::MenuItem("Add...", NULL, false)) {
+					data->isEnd = false;
+					enable_edit = false;
+					selectedCtrlPoint = -1;
+				}
+				if (ImGui::MenuItem("Edit...",NULL, enable_edit,data->isEnd))
+				{
+					// TODO: 显示手柄
+					enable_edit = !enable_edit;
+					
+				}
 				ImGui::EndPopup();
 			}
 
@@ -181,11 +204,62 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			}
 
 			// 画数据点
-			for (int n = 0; n < data->ctrlPoints.size(); ++n) {
-				draw_list->AddCircleFilled(ImVec2(origin.x + data->ctrlPoints[n].point[0], origin.y + data->ctrlPoints[n].point[1]), 4, IM_COL32(255, 255, 255, 255));
+			if (!enable_edit) {
+				for (int n = 0; n < data->ctrlPoints.size(); ++n) {
+					draw_list->AddCircleFilled(ImVec2(origin.x + data->ctrlPoints[n].point[0], origin.y + data->ctrlPoints[n].point[1]), 4, IM_COL32(255, 255, 255, 255));
+				}
+			} else {
+				// 判断鼠标是否选中某点
+				for (int i = 0; i < data->ctrlPoints.size(); ++i) {
+					draw_list->AddQuadFilled(ImVec2(origin.x + data->ctrlPoints[i].point[0] + r, origin.y + data->ctrlPoints[i].point[1] + r),
+						ImVec2(origin.x + data->ctrlPoints[i].point[0] + r, origin.y + data->ctrlPoints[i].point[1] - r),
+						ImVec2(origin.x + data->ctrlPoints[i].point[0] - r, origin.y + data->ctrlPoints[i].point[1] - r),
+						ImVec2(origin.x + data->ctrlPoints[i].point[0] - r, origin.y + data->ctrlPoints[i].point[1] + r), IM_COL32(255, 255, 255, 255));
+					if (selectedCtrlPoint < 0 && (mouse_pos_in_canvas - data->ctrlPoints[i].point).norm2() < 40) {
+						ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+						if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+							selectedCtrlPoint = i;
+						}
+					}
+				}
 			}
 
-			if (!data->isEnd && data->ctrlPoints.size() > 2) {
+			if (selectedCtrlPoint > -1) {
+				if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+					//data->ctrlPoints[selectedCtrlPoint].point = mouse_pos_in_canvas;
+					spdlog::info("bbb:{}", selectedCtrlPoint);
+
+					// 计算曲线
+					ImVec2 tempBSP[MAX_PLOT_NUM_POINTS];
+					std::vector<Ubpa::pointf2> tempcpoints;
+					tempcpoints.clear();
+					for (int i = 0; i < data->ctrlPoints.size(); ++i) {
+						tempcpoints.push_back(data->ctrlPoints[i].point);
+					}
+					tempcpoints[selectedCtrlPoint] = mouse_pos_in_canvas;
+
+					Eigen::VectorXf temppara = parametrization(tempcpoints, data->parametrizationType);
+					int tempp_index = 0;
+					for (int segment_idx = 0; segment_idx < tempcpoints.size() - 1; ++segment_idx) {
+						for (float t = temppara[segment_idx]; t <= temppara[segment_idx + 1] && tempp_index < MAX_PLOT_NUM_POINTS; t += 0.002) {
+							draw_list->AddCircleFilled(ImVec2(Curve::interpolationBSpline(tempcpoints, t, temppara, segment_idx, &(data->_mx), &(data->_my)) + origin), 1, IM_COL32(255, 255, 255, 255));
+						}
+						draw_list->AddQuad(ImVec2(origin.x + mouse_pos_in_canvas[0] + r, origin.y + mouse_pos_in_canvas[1] + r),
+							ImVec2(origin.x + mouse_pos_in_canvas[0] + r, origin.y + mouse_pos_in_canvas[1] - r),
+							ImVec2(origin.x + mouse_pos_in_canvas[0] - r, origin.y + mouse_pos_in_canvas[1] - r),
+							ImVec2(origin.x + mouse_pos_in_canvas[0] - r, origin.y + mouse_pos_in_canvas[1] + r), IM_COL32(255, 255, 255, 255));
+					}
+				}
+				spdlog::info("aaa:{}", selectedCtrlPoint);
+				if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+					data->ctrlPoints[selectedCtrlPoint].point = mouse_pos_in_canvas;
+					selectedCtrlPoint = -1;
+					spdlog::info("ccc:{}", selectedCtrlPoint);
+				}
+			}
+
+
+			if (data->ctrlPoints.size()) {
 				// 计算曲线
 				ImVec2 BSP[MAX_PLOT_NUM_POINTS];
 				std::vector<Ubpa::pointf2> cpoints;
@@ -193,11 +267,21 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				for (int i = 0; i < data->ctrlPoints.size(); ++i) {
 					cpoints.push_back(data->ctrlPoints[i].point);
 				}
+				std::vector<float> _mx = data->_mx;
+				std::vector<float> _my = data->_my;
+
+				// 加入if语句是因为当鼠标点击完还没来得及移动的时候，mouse_pos_in_canvas与back()点一样
+				// 导致各参数化两点重合时，出现问题，比如弦长参数化会出现分母为0，会呈现出短暂的闪屏现象
+				if (!data->isEnd && mouse_pos_in_canvas != data->ctrlPoints.back().point) {
+					cpoints.push_back(mouse_pos_in_canvas);
+					_mx.push_back(0.0f);
+					_my.push_back(0.0f);
+				}
 				Eigen::VectorXf para = parametrization(cpoints, data->parametrizationType);
 				int p_index = 0;
 				for (int segment_idx = 0; segment_idx < cpoints.size() - 1; ++segment_idx) {
 					for (float t = para[segment_idx]; t <= para[segment_idx + 1] && p_index < MAX_PLOT_NUM_POINTS; t += 0.001) {
-						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &(data->_mx),&(data->_my));
+						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &_mx,&_my);
 						BSP[p_index++] = ImVec2(bs_point + origin);
 					}
 				}

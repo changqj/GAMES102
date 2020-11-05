@@ -18,11 +18,16 @@ namespace Curve {
 	/// @details    
 	/// @param[in]  : 
 	/// @return     
-	/// @attention  
+	/// @attention  Mx.My表示弯矩的初值，这里用指针参数，是为了保证一个好的迭代初始值
 	*/
 	Ubpa::pointf2 interpolationBSpline(std::vector<Ubpa::pointf2> points, float t0, Eigen::VectorXf t,int segment_index, std::vector<float>*Mx, std::vector<float>*My) {
 
 		int n = points.size();
+
+		if (points.size()==2)
+		{
+			return Ubpa::pointf2((t[1] - t0) / (t[1] - t[0]) * points[0][0] + (t0 - t[0]) / (t[1] - t[0]) * points[1][0], (t[1] - t0) / (t[1] - t[0]) * points[0][1] + (t0 - t[0]) / (t[1] - t[0]) * points[1][1]);
+		}
 
 		if (points.size() > 2) {
 			std::vector<float> h, u, v_x, v_y;
@@ -50,10 +55,19 @@ namespace Curve {
 
 			return Ubpa::pointf2(x, y);
 		}
+
+		return points.back();
 	}
 }
 
 
+/*
+/// @brief      高斯-塞德尔迭代法
+/// @details    
+/// @param[in]  : 
+/// @return     
+/// @attention  
+*/
 void GaussSeidel(std::vector<float> h, std::vector<float> u, std::vector<float> v, std::vector<float>* M) {
 	std::vector<float> _M0 = *M;
 
@@ -62,6 +76,7 @@ void GaussSeidel(std::vector<float> h, std::vector<float> u, std::vector<float> 
 			(*M)[i + 1] = (v[i] - h[i] * (*M)[i] - h[i + 1] * _M0[i + 2]) / u[i];
 		}
 
+		// 迭代停止条件
 		if ((Eigen::VectorXf::Map((*M).data(), (*M).size()) - Eigen::VectorXf::Map(_M0.data(), _M0.size())).norm() < EPSILON) {
 			break;
 		}
