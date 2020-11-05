@@ -17,6 +17,8 @@ assets/
 *.dds
 
 *.mp4
+*.pdf
+!GAMES102_report_*.pdf
 
 *.html
 
