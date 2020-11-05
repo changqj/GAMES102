@@ -102,6 +102,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { data->isEnd = true; }	// Ë«»÷½áÊø
 			if (is_hovered && !data->isEnd && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 				data->ctrlPoints.push_back(CtrlPoint(mouse_pos_in_canvas));
+				data->_mx.push_back(0.0f);
+				data->_my.push_back(0.0f);
 				spdlog::info("Point added at: {}, {}", data->ctrlPoints.back().point[0], data->ctrlPoints.back().point[1]);
 			}
 
@@ -155,8 +157,16 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			if (data->opt_enable_context_menu && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && drag_delta.x == 0.0f && drag_delta.y == 0.0f)
 				ImGui::OpenPopupContextItem("context");
 			if (ImGui::BeginPopup("context")) {
-				if (ImGui::MenuItem("Remove one", NULL, false, data->ctrlPoints.size() > 0)) { data->ctrlPoints.resize(data->ctrlPoints.size() - 1); }
-				if (ImGui::MenuItem("Remove all", NULL, false, data->ctrlPoints.size() > 0)) { data->ctrlPoints.clear(); }
+				if (ImGui::MenuItem("Remove one", NULL, false, data->ctrlPoints.size() > 0)) {
+					data->ctrlPoints.resize(data->ctrlPoints.size() - 1);
+					data->_mx.resize(data->_mx.size() - 1);
+					data->_my.resize(data->_my.size() - 1);
+				}
+				if (ImGui::MenuItem("Remove all", NULL, false, data->ctrlPoints.size() > 0)) {
+					data->ctrlPoints.clear();
+					data->_mx.clear();
+					data->_my.clear();
+				}
 				ImGui::EndPopup();
 			}
 
@@ -186,8 +196,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				Eigen::VectorXf para = parametrization(cpoints, data->parametrizationType);
 				int p_index = 0;
 				for (int segment_idx = 0; segment_idx < cpoints.size() - 1; ++segment_idx) {
-					for (float t = para[segment_idx]; t <= para[segment_idx + 1] && p_index < MAX_PLOT_NUM_POINTS; t += 0.01) {
-						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx);
+					for (float t = para[segment_idx]; t <= para[segment_idx + 1] && p_index < MAX_PLOT_NUM_POINTS; t += 0.001) {
+						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &(data->_mx),&(data->_my));
 						BSP[p_index++] = ImVec2(bs_point + origin);
 					}
 				}

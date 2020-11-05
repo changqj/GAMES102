@@ -36,6 +36,8 @@ struct Ubpa::USRefl::TypeInfo<CanvasData>
         Field{"importData", &CanvasData::importData},
         Field{"exportData", &CanvasData::exportData},
         Field{"isEnd", &CanvasData::isEnd},
+        Field{"_mx", &CanvasData::_mx},
+        Field{"_my", &CanvasData::_my},
     };
 };
 

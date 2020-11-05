@@ -24,6 +24,9 @@ struct CanvasData {
 	bool exportData{ false };
 
 	bool isEnd{ false };
+
+	std::vector<float> _mx;
+	std::vector<float> _my;
 };
 
 #include "details/CanvasData_AutoRefl.inl"
