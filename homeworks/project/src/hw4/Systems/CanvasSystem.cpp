@@ -23,6 +23,10 @@ int selectedCtrlPoint = -1;
 
 float r = 5.0f;	// 方形点的半径
 
+int modelType = 0;	// 0: 平滑顶点；  1：直线顶点；   2：角部顶点
+int selectedRight = -1;
+
+
 Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametrizationType) {
 	//parametrization
 	switch (parametrizationType) {
@@ -42,8 +46,9 @@ Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametri
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 	spdlog::set_pattern("[%H:%M:%S] %v");
 	//spdlog::set_pattern("%+"); // back to default format
-
+	
 	schedule.RegisterCommand([](Ubpa::UECS::World* w) {
+		
 		auto data = w->entityMngr.GetSingleton<CanvasData>();
 
 		if (!data)
@@ -110,12 +115,10 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				data->ctrlPoints.push_back(CtrlPoint(mouse_pos_in_canvas));
 				data->_mx.push_back(0.0f);
 				data->_my.push_back(0.0f);
+				selectedRight++;
 				spdlog::info("Point added at: {}, {}", data->ctrlPoints.back().point[0], data->ctrlPoints.back().point[1]);
 				spdlog::info(enable_edit);
 			}
-
-
-
 
 			if (data->importData || (io.KeyCtrl && ImGui::IsKeyPressed(79))) {
 				ImGui::OpenPopup("Import Data");
@@ -132,9 +135,10 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				float x, y;
 				while (in >> x >> y) {
 					data->ctrlPoints.push_back(CtrlPoint(ImVec2(x, y)));
-					data->ctrlPoints.push_back(CtrlPoint(ImVec2(x, y)));
+					data->_mx.push_back(0.0f);
+					data->_my.push_back(0.0f);
 				}
-
+				selectedRight = data->ctrlPoints.size() - 1;
 				spdlog::info(file_dialog.selected_path);
 			}
 
@@ -173,22 +177,41 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					data->ctrlPoints.resize(data->ctrlPoints.size() - 1);
 					data->_mx.resize(data->_mx.size() - 1);
 					data->_my.resize(data->_my.size() - 1);
+					selectedRight--;
 				}
 				if (ImGui::MenuItem("Remove all", NULL, false, data->ctrlPoints.size() > 0)) {
 					data->ctrlPoints.clear();
 					data->_mx.clear();
 					data->_my.clear();
+					selectedRight = -1;
 				}
 				if (ImGui::MenuItem("Add...", NULL, false)) {
 					data->isEnd = false;
 					enable_edit = false;
 					selectedCtrlPoint = -1;
+					selectedRight = data->ctrlPoints.size() - 1;
 				}
-				if (ImGui::MenuItem("Edit...",NULL, enable_edit,data->isEnd))
-				{
+				if (ImGui::MenuItem("Edit...", NULL, enable_edit, data->isEnd)) {
 					// TODO: 显示手柄
 					enable_edit = !enable_edit;
-					
+				}
+				if (ImGui::MenuItem("Smooth...", NULL, modelType == 0, enable_edit && selectedRight!=-1)) {
+					// 平滑顶点
+					data->parametrizationType = 1;
+					spdlog::info("1111111:{}", selectedRight);
+					modelType = 0;
+				}
+				if (ImGui::MenuItem("Straight line...", NULL, modelType == 1, enable_edit && selectedRight != -1)) {
+					// 直线顶点
+					data->parametrizationType = 2;
+					spdlog::info("222222:{}", selectedRight);
+					modelType = 1;
+				}
+				if (ImGui::MenuItem("Corner...", NULL, modelType == 2, enable_edit && selectedRight != -1)) {
+					// 角部顶点
+					data->parametrizationType = 3;
+					spdlog::info("3333333:{}", selectedRight);
+					modelType = 2;
 				}
 				ImGui::EndPopup();
 			}
@@ -220,13 +243,20 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 						if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 							selectedCtrlPoint = i;
 						}
+						if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+							selectedRight = i;
+							spdlog::info("000000:{}", selectedRight);
+						}
 					}
 				}
 			}
 
-			if (selectedCtrlPoint > -1) {
+
+			if (selectedCtrlPoint > -1 ) {
+				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 				if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
 					//data->ctrlPoints[selectedCtrlPoint].point = mouse_pos_in_canvas;
+					
 					spdlog::info("bbb:{}", selectedCtrlPoint);
 
 					// 计算曲线
@@ -256,6 +286,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					selectedCtrlPoint = -1;
 					spdlog::info("ccc:{}", selectedCtrlPoint);
 				}
+
 			}
 
 
@@ -281,14 +312,11 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				int p_index = 0;
 				for (int segment_idx = 0; segment_idx < cpoints.size() - 1; ++segment_idx) {
 					for (float t = para[segment_idx]; t <= para[segment_idx + 1] && p_index < MAX_PLOT_NUM_POINTS; t += 0.001) {
-						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &_mx,&_my);
+						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &_mx, &_my);
 						BSP[p_index++] = ImVec2(bs_point + origin);
 					}
 				}
 				draw_list->AddPolyline(BSP, p_index, IM_COL32(0, 255, 0, 255), false, 2.0f);
-			}
-			if (data->ctrlPoints.size() > 2) {
-
 			}
 			draw_list->PopClipRect();
 		}

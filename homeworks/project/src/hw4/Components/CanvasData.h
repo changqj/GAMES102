@@ -15,7 +15,7 @@ struct CtrlPoint {
 struct CanvasData {
 	std::vector<CtrlPoint> ctrlPoints;
 	Ubpa::valf2 scrolling{ 0.f,0.f };
-	bool opt_enable_grid{ true };
+	bool opt_enable_grid{ false };
 	bool opt_enable_context_menu{ true };
 
 	int parametrizationType = 0;
