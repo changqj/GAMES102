@@ -189,7 +189,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					data->isEnd = false;
 					enable_edit = false;
 					selectedCtrlPoint = -1;
-					selectedRight = data->ctrlPoints.size() - 1;
+					selectedRight = data->ctrlPoints.size()-1;
 				}
 				if (ImGui::MenuItem("Edit...", NULL, enable_edit, data->isEnd)) {
 					// TODO: отй╬йж╠З

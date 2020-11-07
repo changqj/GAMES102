@@ -16,16 +16,20 @@ namespace Curve {
 	/*
 	/// @brief      
 	/// @details    
-	/// @param[in]  : 
+	/// @param[in]  : derivative : 左x,左y,右x,右y
 	/// @return     
 	/// @attention  Mx.My表示弯矩的初值，这里用指针参数，是为了保证一个好的迭代初始值
 	*/
-	Ubpa::pointf2 interpolationBSpline(std::vector<Ubpa::pointf2> points, float t0, Eigen::VectorXf t,int segment_index, std::vector<float>*Mx, std::vector<float>*My) {
+	Ubpa::pointf2 interpolationBSpline(std::vector<Ubpa::pointf2> points, float t0, Eigen::VectorXf t,int segment_index, std::vector<float> *Mx, std::vector<float> *My) {
 
 		int n = points.size();
 
 		if (points.size()==2)
 		{
+			// 导数
+			//derivative = (std::make_pair(std::make_pair(0,0),std::make_pair(points[1][0]-points[0][0],points[1][1]-points[0][1])));
+			//derivative->push_back(std::make_pair(std::make_pair(0,0),std::make_pair(points[1][0]-points[0][0],points[1][1]-points[0][1])));
+
 			return Ubpa::pointf2((t[1] - t0) / (t[1] - t[0]) * points[0][0] + (t0 - t[0]) / (t[1] - t[0]) * points[1][0], (t[1] - t0) / (t[1] - t[0]) * points[0][1] + (t0 - t[0]) / (t[1] - t[0]) * points[1][1]);
 		}
 
@@ -41,8 +45,13 @@ namespace Curve {
 			GaussSeidel(h, u, v_x, Mx);
 			GaussSeidel(h, u, v_y, My);
 
+			// 导数
+
+
 			std::vector<float> _mx = *Mx;
 			std::vector<float> _my = *My;
+
+
 
 			float x = _mx[segment_index] / (6 * (t[segment_index + 1] - t[segment_index])) * powf(t[segment_index + 1] - t0, 3);
 			x += _mx[segment_index + 1] / (6 * (t[segment_index + 1] - t[segment_index])) * powf(t0 - t[segment_index], 3);
