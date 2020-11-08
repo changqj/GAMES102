@@ -41,6 +41,15 @@ assets/
 *.ilk
 *.pdb
 
+*.aux
+*.bbl
+*.blg
+*.gz
+*.bib
+*/.idea/*
+HW2/*
+excellent/*
+
 assets/materials/
 assets/models/
 assets/textures/

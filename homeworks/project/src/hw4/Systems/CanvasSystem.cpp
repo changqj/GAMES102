@@ -14,6 +14,7 @@
 using namespace Ubpa;
 
 constexpr auto MAX_PLOT_NUM_POINTS = 10000;
+constexpr auto SCALE = 20.0f;
 
 imgui_addons::ImGuiFileBrowser file_dialog;
 
@@ -23,8 +24,11 @@ int selectedCtrlPoint = -1;
 
 float r = 5.0f;	// 方形点的半径
 
-int modelType = 0;	// 0: 平滑顶点；  1：直线顶点；   2：角部顶点
+std::vector<int> modelType;	// 0: 平滑顶点；  1：直线顶点；   2：角部顶点
 int selectedRight = -1;
+
+bool validDerivative = false;
+int leftOrRight = -1;	// 0: 表示激活当前点左导数手柄 1:表示激活右导数手柄
 
 
 Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametrizationType) {
@@ -43,12 +47,49 @@ Eigen::VectorXf parametrization(std::vector<Ubpa::pointf2> points, int parametri
 	}
 }
 
+void drawQuad(ImDrawList* draw_list, Ubpa::pointf2 center, float r, bool isFilled, ImU32 col) {
+	isFilled ? draw_list->AddQuadFilled(ImVec2(center[0] + r, center[1] + r), ImVec2(center[0] + r, center[1] - r), ImVec2(center[0] - r, center[1] - r), ImVec2(center[0] - r, center[1] + r), col) : draw_list->AddQuad(ImVec2(center[0] + r, center[1] + r), ImVec2(center[0] + r, center[1] - r), ImVec2(center[0] - r, center[1] - r), ImVec2(center[0] - r, center[1] + r), col);
+}
+
+void drawHandel(ImDrawList* draw_list, Ubpa::pointf2 center, std::pair<Ubpa::pointf2, Ubpa::pointf2> derivative, ImVec2 origin, float r, ImU32 col1, ImU32 col2, bool isFirst = false, bool isLast = false) {
+	Ubpa::pointf2 d;
+	// 除了最后一个点，都画右导数
+	if (!isLast) {
+		d = ImVec2(derivative.second[0] / SCALE + center[0] + origin.x, derivative.second[1] / SCALE + center[1] + origin.y);
+		drawQuad(draw_list, d, r, false, col1);
+		draw_list->AddLine(center + origin, d, col2);
+	}
+
+	// 除了第一个点，都画左导数
+	if (!isFirst) {
+		d = ImVec2(-derivative.first[0] / SCALE + center[0] + origin.x, -derivative.first[1] / SCALE + center[1] + origin.y);
+		drawQuad(draw_list, d, r, false, col1);
+		draw_list->AddLine(d, center + origin, col2);
+	}
+}
+
+// D1 要更改的那个
+Ubpa::pointf2 Straight_line(Ubpa::pointf2 center, Ubpa::pointf2 D, Ubpa::pointf2 D1) {
+	float l,x, y;
+	if ((D - center).norm() < EPSILON)
+		return D1;
+	spdlog::info("d1-c:{}", (D1 - center).norm()*((D1 - center).norm()));
+	spdlog::info("d-c:{}", (D1 - center).norm2());
+	l = (D1 - center).norm()/(D-center).norm();
+	//spdlog::info("l:{}", l);
+
+	x = l * (D[0] - center[0]) + center[0];
+	y = l * (D[1] - center[1]) + center[1];
+
+	return Ubpa::pointf2(x, y);
+}
+
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 	spdlog::set_pattern("[%H:%M:%S] %v");
 	//spdlog::set_pattern("%+"); // back to default format
 	
 	schedule.RegisterCommand([](Ubpa::UECS::World* w) {
-		
+		bool enable_handel = true;
 		auto data = w->entityMngr.GetSingleton<CanvasData>();
 
 		if (!data)
@@ -110,13 +151,19 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			const pointf2 mouse_pos_in_canvas(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
 
 			// add a point
-			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { data->isEnd = true; }	// 双击结束
+			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { 
+				data->isEnd = true;
+				modelType[0] = 2;  // 首尾顶点模式都为角部顶点
+				modelType.back() = 2;
+			}	// 双击结束
 			if (is_hovered && !data->isEnd && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-				data->ctrlPoints.push_back(CtrlPoint(mouse_pos_in_canvas));
+				data->points.push_back(mouse_pos_in_canvas);
 				data->_mx.push_back(0.0f);
 				data->_my.push_back(0.0f);
+				data->derivative.push_back(std::make_pair(Ubpa::pointf2(0.0f, 0.0f), Ubpa::pointf2(0.0f, 0.0f)));
+				modelType.push_back(0);
 				selectedRight++;
-				spdlog::info("Point added at: {}, {}", data->ctrlPoints.back().point[0], data->ctrlPoints.back().point[1]);
+				spdlog::info("Point added at: {}, {}", data->points.back()[0], data->points.back()[1]);
 				spdlog::info(enable_edit);
 			}
 
@@ -130,15 +177,17 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			}
 
 			if (file_dialog.showFileDialog("Import Data", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".txt,.xy,.*")) {
-				data->ctrlPoints.clear();
+				data->points.clear();
 				std::ifstream in(file_dialog.selected_path);
 				float x, y;
 				while (in >> x >> y) {
-					data->ctrlPoints.push_back(CtrlPoint(ImVec2(x, y)));
+					data->points.push_back(ImVec2(x, y));
 					data->_mx.push_back(0.0f);
 					data->_my.push_back(0.0f);
+					data->derivative.push_back(std::make_pair(Ubpa::pointf2(0.0f, 0.0f), Ubpa::pointf2(0.0f, 0.0f)));
+					modelType.push_back(0);
 				}
-				selectedRight = data->ctrlPoints.size() - 1;
+				selectedRight = data->points.size() - 1;
 				spdlog::info(file_dialog.selected_path);
 			}
 
@@ -146,8 +195,8 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			if (file_dialog.showFileDialog("Export Data", imgui_addons::ImGuiFileBrowser::DialogMode::SAVE, ImVec2(700, 310), ".txt,.xy,.*")) {
 				std::ofstream out(file_dialog.selected_path);
 
-				for (int n = 0; n < data->ctrlPoints.size(); ++n)
-					out << data->ctrlPoints[n].point[0] << "\t" << data->ctrlPoints[n].point[1] << std::endl;
+				for (int n = 0; n < data->points.size(); ++n)
+					out << data->points[n][0] << "\t" << data->points[n][1] << std::endl;
 
 				spdlog::info(file_dialog.selected_path);
 			}
@@ -163,7 +212,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				data->scrolling[1] += io.MouseDelta.y;
 			}
 
-			if (!data->ctrlPoints.size()) {
+			if (!data->points.size()) {
 				data->isEnd = false;
 				enable_edit = false;
 			}
@@ -173,45 +222,62 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			if (data->opt_enable_context_menu && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && drag_delta.x == 0.0f && drag_delta.y == 0.0f)
 				ImGui::OpenPopupContextItem("context");
 			if (ImGui::BeginPopup("context")) {
-				if (ImGui::MenuItem("Remove one", NULL, false, data->ctrlPoints.size() > 0)) {
-					data->ctrlPoints.resize(data->ctrlPoints.size() - 1);
+				if (ImGui::MenuItem("Remove one", NULL, false, data->points.size() > 0)) {
+					data->points.resize(data->points.size() - 1);
 					data->_mx.resize(data->_mx.size() - 1);
 					data->_my.resize(data->_my.size() - 1);
+					data->derivative.resize(data->derivative.size() - 1);
+					modelType.pop_back();
 					selectedRight--;
 				}
-				if (ImGui::MenuItem("Remove all", NULL, false, data->ctrlPoints.size() > 0)) {
-					data->ctrlPoints.clear();
+				if (ImGui::MenuItem("Remove all", NULL, false, data->points.size() > 0)) {
+					data->points.clear();
 					data->_mx.clear();
 					data->_my.clear();
+					data->derivative.clear();
+					modelType.clear();
+					validDerivative = false;
 					selectedRight = -1;
 				}
 				if (ImGui::MenuItem("Add...", NULL, false)) {
 					data->isEnd = false;
 					enable_edit = false;
 					selectedCtrlPoint = -1;
-					selectedRight = data->ctrlPoints.size()-1;
+					selectedRight = data->points.size()-1;
 				}
 				if (ImGui::MenuItem("Edit...", NULL, enable_edit, data->isEnd)) {
 					// TODO: 显示手柄
 					enable_edit = !enable_edit;
 				}
-				if (ImGui::MenuItem("Smooth...", NULL, modelType == 0, enable_edit && selectedRight!=-1)) {
+				if (ImGui::MenuItem("Smooth...", NULL, modelType[selectedRight] == 0, enable_edit && selectedRight>0 && selectedRight != data->points.size() - 1)) {
 					// 平滑顶点
-					data->parametrizationType = 1;
 					spdlog::info("1111111:{}", selectedRight);
-					modelType = 0;
+					
+					// 如果左边手柄激活 
+					if (!leftOrRight && selectedRight!=0) {
+						data->derivative[selectedRight].second = data->derivative[selectedRight].first;
+					}
+					if (leftOrRight && selectedRight != data->points.size() - 1) {
+						data->derivative[selectedRight].first = data->derivative[selectedRight].second;
+					}
+					modelType[selectedRight] = 0;
 				}
-				if (ImGui::MenuItem("Straight line...", NULL, modelType == 1, enable_edit && selectedRight != -1)) {
+				if (ImGui::MenuItem("Straight line...", NULL, modelType[selectedRight] == 1, enable_edit && selectedRight > 0 && selectedRight!=data->points.size()-1)) {
 					// 直线顶点
-					data->parametrizationType = 2;
 					spdlog::info("222222:{}", selectedRight);
-					modelType = 1;
+					// 如果左边手柄激活 
+					if (!leftOrRight && selectedRight != 0) {
+						data->derivative[selectedRight].second = Straight_line(data->points[selectedRight], data->derivative[selectedRight].first, data->derivative[selectedRight].second);
+					}
+					if (leftOrRight && selectedRight != data->points.size() - 1) {
+						data->derivative[selectedRight].first = Straight_line(data->points[selectedRight], data->derivative[selectedRight].second, data->derivative[selectedRight].first);
+					}
+					modelType[selectedRight] = 1;
 				}
-				if (ImGui::MenuItem("Corner...", NULL, modelType == 2, enable_edit && selectedRight != -1)) {
+				if (ImGui::MenuItem("Corner...", NULL, modelType[selectedRight] == 2, enable_edit && selectedRight != -1)) {
 					// 角部顶点
-					data->parametrizationType = 3;
 					spdlog::info("3333333:{}", selectedRight);
-					modelType = 2;
+					modelType[selectedRight] = 2;
 				}
 				ImGui::EndPopup();
 			}
@@ -228,95 +294,128 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 
 			// 画数据点
 			if (!enable_edit) {
-				for (int n = 0; n < data->ctrlPoints.size(); ++n) {
-					draw_list->AddCircleFilled(ImVec2(origin.x + data->ctrlPoints[n].point[0], origin.y + data->ctrlPoints[n].point[1]), 4, IM_COL32(255, 255, 255, 255));
+				for (int n = 0; n < data->points.size(); ++n) {
+					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 4, IM_COL32(255, 255, 255, 255));
 				}
 			} else {
 				// 判断鼠标是否选中某点
-				for (int i = 0; i < data->ctrlPoints.size(); ++i) {
-					draw_list->AddQuadFilled(ImVec2(origin.x + data->ctrlPoints[i].point[0] + r, origin.y + data->ctrlPoints[i].point[1] + r),
-						ImVec2(origin.x + data->ctrlPoints[i].point[0] + r, origin.y + data->ctrlPoints[i].point[1] - r),
-						ImVec2(origin.x + data->ctrlPoints[i].point[0] - r, origin.y + data->ctrlPoints[i].point[1] - r),
-						ImVec2(origin.x + data->ctrlPoints[i].point[0] - r, origin.y + data->ctrlPoints[i].point[1] + r), IM_COL32(255, 255, 255, 255));
-					if (selectedCtrlPoint < 0 && (mouse_pos_in_canvas - data->ctrlPoints[i].point).norm2() < 40) {
+				for (int i = 0; i < data->points.size(); ++i) {
+					drawQuad(draw_list, ImVec2(origin.x + data->points[i][0], origin.y + data->points[i][1]), r, selectedRight == i, IM_COL32(255, 255, 255, 255));
+					if (selectedCtrlPoint < 0 && (mouse_pos_in_canvas - data->points[i]).norm2() < 40) {
 						ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 						if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 							selectedCtrlPoint = i;
-						}
-						if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
 							selectedRight = i;
-							spdlog::info("000000:{}", selectedRight);
 						}
+						if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { selectedRight = i; }
 					}
 				}
 			}
 
+			// 跑断鼠标是否指向手柄点
+			if (enable_edit && selectedRight > -1 && selectedCtrlPoint == -1) {
+				if ((mouse_pos_in_canvas - pointf2(-data->derivative[selectedRight].first[0] / SCALE + data->points[selectedRight][0], -data->derivative[selectedRight].first[1] / SCALE + data->points[selectedRight][1])).norm2() < 40) {
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+					leftOrRight = 0;
+				}
+				if ((mouse_pos_in_canvas - pointf2(data->derivative[selectedRight].second[0] / SCALE + data->points[selectedRight][0], data->derivative[selectedRight].second[1] / SCALE + data->points[selectedRight][1])).norm2() < 40) {
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+					leftOrRight = 1;
+				}
+				if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+					spdlog::info("----> handle drag");
+					if (leftOrRight == 0) {
+						data->derivative[selectedRight].first = Ubpa::pointf2(SCALE * (data->points[selectedRight][0] - mouse_pos_in_canvas[0]), SCALE * (data->points[selectedRight][1] - mouse_pos_in_canvas[1]));
+						if (modelType[selectedRight] == 0) {
+							// 平滑
+							data->derivative[selectedRight].second = data->derivative[selectedRight].first;
+						}
+						if (modelType[selectedRight] == 1) {
+							// 直线
+							data->derivative[selectedRight].second = Straight_line(data->points[selectedRight], data->derivative[selectedRight].first, data->derivative[selectedRight].second);
+						}
+						validDerivative = true;
+						spdlog::info("aaaaa");
+					}
+					if (leftOrRight == 1) {
+						data->derivative[selectedRight].second = Ubpa::pointf2(SCALE * (-data->points[selectedRight][0] + mouse_pos_in_canvas[0]), SCALE * (-data->points[selectedRight][1] + mouse_pos_in_canvas[1]));
+						if (modelType[selectedRight] == 0) {
+							data->derivative[selectedRight].first = data->derivative[selectedRight].second;
+						}
+						if (modelType[selectedRight] == 1) {
+							data->derivative[selectedRight].first = Straight_line(data->points[selectedRight], data->derivative[selectedRight].second, data->derivative[selectedRight].first);
+						}
+						validDerivative = true;
+					}
+				}
+			}
 
 			if (selectedCtrlPoint > -1 ) {
 				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+				// 拖动实心点的事件
 				if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-					//data->ctrlPoints[selectedCtrlPoint].point = mouse_pos_in_canvas;
-					
-					spdlog::info("bbb:{}", selectedCtrlPoint);
-
 					// 计算曲线
-					ImVec2 tempBSP[MAX_PLOT_NUM_POINTS];
-					std::vector<Ubpa::pointf2> tempcpoints;
-					tempcpoints.clear();
-					for (int i = 0; i < data->ctrlPoints.size(); ++i) {
-						tempcpoints.push_back(data->ctrlPoints[i].point);
-					}
+					std::vector<Ubpa::pointf2> tempcpoints = data->points;
 					tempcpoints[selectedCtrlPoint] = mouse_pos_in_canvas;
-
 					Eigen::VectorXf temppara = parametrization(tempcpoints, data->parametrizationType);
-					int tempp_index = 0;
 					for (int segment_idx = 0; segment_idx < tempcpoints.size() - 1; ++segment_idx) {
-						for (float t = temppara[segment_idx]; t <= temppara[segment_idx + 1] && tempp_index < MAX_PLOT_NUM_POINTS; t += 0.002) {
-							draw_list->AddCircleFilled(ImVec2(Curve::interpolationBSpline(tempcpoints, t, temppara, segment_idx, &(data->_mx), &(data->_my)) + origin), 1, IM_COL32(255, 255, 255, 255));
+						for (float t = temppara[segment_idx]; t <= temppara[segment_idx + 1]; t += 0.002) {
+							draw_list->AddCircleFilled(ImVec2(Curve::interpolationBSpline(tempcpoints, t, temppara, segment_idx, &(data->_mx), &(data->_my), &(data->derivative), true) + origin), 1, IM_COL32(255, 255, 255, 255));
 						}
-						draw_list->AddQuad(ImVec2(origin.x + mouse_pos_in_canvas[0] + r, origin.y + mouse_pos_in_canvas[1] + r),
-							ImVec2(origin.x + mouse_pos_in_canvas[0] + r, origin.y + mouse_pos_in_canvas[1] - r),
-							ImVec2(origin.x + mouse_pos_in_canvas[0] - r, origin.y + mouse_pos_in_canvas[1] - r),
-							ImVec2(origin.x + mouse_pos_in_canvas[0] - r, origin.y + mouse_pos_in_canvas[1] + r), IM_COL32(255, 255, 255, 255));
 					}
+					drawQuad(draw_list, ImVec2(origin.x + mouse_pos_in_canvas[0], origin.y + mouse_pos_in_canvas[1]), r, true, IM_COL32(255, 255, 255, 255));
+					// 画代表一阶导的交互手柄
+					enable_handel = false;
+					drawHandel(draw_list, mouse_pos_in_canvas, data->derivative[selectedRight], origin, r, IM_COL32(255, 255, 0, 255), IM_COL32(255, 255, 255, 255), selectedRight == 0, selectedRight == data->points.size() - 1);
 				}
 				spdlog::info("aaa:{}", selectedCtrlPoint);
 				if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-					data->ctrlPoints[selectedCtrlPoint].point = mouse_pos_in_canvas;
+					data->points[selectedCtrlPoint] = mouse_pos_in_canvas;
 					selectedCtrlPoint = -1;
-					spdlog::info("ccc:{}", selectedCtrlPoint);
 				}
 
 			}
 
 
-			if (data->ctrlPoints.size()) {
+			if (data->points.size()) {
 				// 计算曲线
 				ImVec2 BSP[MAX_PLOT_NUM_POINTS];
-				std::vector<Ubpa::pointf2> cpoints;
-				cpoints.clear();
-				for (int i = 0; i < data->ctrlPoints.size(); ++i) {
-					cpoints.push_back(data->ctrlPoints[i].point);
-				}
+				
 				std::vector<float> _mx = data->_mx;
 				std::vector<float> _my = data->_my;
+				std::vector< Ubpa::pointf2> cpoints = data->points;
+				std::vector<std::pair<Ubpa::pointf2, Ubpa::pointf2>> _derivative = data->derivative;
 
-				// 加入if语句是因为当鼠标点击完还没来得及移动的时候，mouse_pos_in_canvas与back()点一样
+				// 加入if语句是为了避免当鼠标点击完还没来得及移动的时候，mouse_pos_in_canvas与back()点一样
 				// 导致各参数化两点重合时，出现问题，比如弦长参数化会出现分母为0，会呈现出短暂的闪屏现象
-				if (!data->isEnd && mouse_pos_in_canvas != data->ctrlPoints.back().point) {
+				bool added = false;
+				if (!data->isEnd && mouse_pos_in_canvas != cpoints.back()) {
 					cpoints.push_back(mouse_pos_in_canvas);
 					_mx.push_back(0.0f);
 					_my.push_back(0.0f);
+					_derivative.push_back(std::make_pair(Ubpa::pointf2(0.0f, 0.0f), Ubpa::pointf2(0.0f, 0.0f)));
+					added = true;
 				}
 				Eigen::VectorXf para = parametrization(cpoints, data->parametrizationType);
 				int p_index = 0;
 				for (int segment_idx = 0; segment_idx < cpoints.size() - 1; ++segment_idx) {
 					for (float t = para[segment_idx]; t <= para[segment_idx + 1] && p_index < MAX_PLOT_NUM_POINTS; t += 0.001) {
-						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &_mx, &_my);
+						Ubpa::pointf2 bs_point = Curve::interpolationBSpline(cpoints, t, para, segment_idx, &_mx, &_my, &_derivative, validDerivative);
 						BSP[p_index++] = ImVec2(bs_point + origin);
 					}
 				}
+				if (added) {
+					_mx.pop_back();
+					_my.pop_back();
+					_derivative.pop_back();
+				}
+				data->_mx = _mx;
+				data->_my = _my;
+				data->derivative = _derivative;
 				draw_list->AddPolyline(BSP, p_index, IM_COL32(0, 255, 0, 255), false, 2.0f);
+				if (enable_edit && enable_handel) {
+					drawHandel(draw_list, data->points[selectedRight], data->derivative[selectedRight], origin, r, IM_COL32(255, 255, 0, 255), IM_COL32(255, 255, 255, 255), selectedRight == 0, selectedRight == data->points.size() - 1);
+				}
 			}
 			draw_list->PopClipRect();
 		}
