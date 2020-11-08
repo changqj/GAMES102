@@ -229,8 +229,10 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					data->_mx.resize(data->_mx.size() - 1);
 					data->_my.resize(data->_my.size() - 1);
 					data->derivative.resize(data->derivative.size() - 1);
-					modelType.pop_back();
-					selectedRight--;
+					modelType.resize(modelType.size() - 1);
+					if (selectedRight == data->points.size()) {
+						selectedRight--;
+					}
 				}
 				if (ImGui::MenuItem("Remove all", NULL, false, data->points.size() > 0)) {
 					data->points.clear();
