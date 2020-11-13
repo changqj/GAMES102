@@ -107,7 +107,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				ImGui::Separator();
 
 				ImGui::Text("USER GUIDE:");
-				ImGui::BulletText("Mouse Left: drag to add lines, click to add points.");
+				ImGui::BulletText("Mouse Left: click to add points.");
 				ImGui::BulletText("Mouse Right: drag to scroll, click for context menu.");
 				ImGui::BulletText("Ctrl+O: Import Data");
 				ImGui::BulletText("Ctrl+S: Export Data");
@@ -175,6 +175,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				ImGui::OpenPopup("Export Data");
 				data->exportData = false;
 			}
+
 
 			if (file_dialog.showFileDialog("Import Data", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".txt,.xy,.*")) {
 				data->points.clear();
@@ -364,7 +365,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					tempcpoints[selectedCtrlPoint] = mouse_pos_in_canvas;
 					Eigen::VectorXf temppara = parametrization(tempcpoints, data->parametrizationType);
 					for (int segment_idx = 0; segment_idx < tempcpoints.size() - 1; ++segment_idx) {
-						for (float t = temppara[segment_idx]; t <= temppara[segment_idx + 1]; t += 0.002) {
+						for (float t = temppara[segment_idx]; t <= temppara[segment_idx + 1]; t += 0.001) {
 							draw_list->AddCircleFilled(ImVec2(Curve::interpolationBSpline(tempcpoints, t, temppara, segment_idx, &(data->_mx), &(data->_my), &(data->derivative), true) + origin), 1, IM_COL32(255, 255, 255, 255));
 						}
 					}
@@ -417,7 +418,7 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 				data->_mx = _mx;
 				data->_my = _my;
 				data->derivative = _derivative;
-				draw_list->AddPolyline(BSP, p_index, IM_COL32(0, 255, 0, 255), false, 2.0f);
+				draw_list->AddPolyline(BSP, p_index, IM_COL32(0, 255, 0, 255), false, 1.0f);
 				if (enable_edit && enable_handel) {
 					drawHandel(draw_list, data->points[selectedRight], data->derivative[selectedRight], origin, r+3, IM_COL32(255, 255, 0, 255), IM_COL32(255, 255, 255, 255), selectedRight == 0, selectedRight == data->points.size() - 1);
 				}
