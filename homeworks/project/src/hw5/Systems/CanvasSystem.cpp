@@ -1,6 +1,7 @@
 #include "CanvasSystem.h"
 
 #include "../Components/CanvasData.h"
+#include "../Subdivision/Subdivision.h"
 
 #include <_deps/imgui/imgui.h>
 #include "../ImGuiFileBrowser.h"
@@ -12,9 +13,16 @@
 using namespace Ubpa;
 
 constexpr auto MAX_PLOT_NUM_POINTS = 10000;
-constexpr auto SCALE = 20.0f;
 
 imgui_addons::ImGuiFileBrowser file_dialog;
+
+bool chaikin = true;
+bool cubic = false;
+bool quad_ = false;
+bool closed = false;
+int step_num = 3;
+int alpha = 12;
+bool originPoints = true;
 
 
 void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
@@ -52,6 +60,17 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 
 			ImGui::Separator();
 
+			ImGui::BeginChild("order_als_id", ImVec2(200, 200));
+			ImGui::Checkbox("origin", &originPoints);
+			ImGui::Checkbox("Chaikin", &chaikin);
+			ImGui::Checkbox("cubic", &cubic);
+			ImGui::Checkbox("closed", &closed);
+			ImGui::InputInt("step_num", &step_num);
+			step_num = step_num < 0 ? 0 : step_num;
+			step_num = step_num > 10 ? 10 : step_num;
+			ImGui::Checkbox("quad", &quad_);
+			ImGui::SliderInt("alpha", &alpha, 1, 32, "alpha = 1/%d");
+			ImGui::EndChild(); ImGui::SameLine(250);
 
 			ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();      // ImDrawList API uses screen coordinates!
 			ImVec2 canvas_sz = ImGui::GetContentRegionAvail();   // Resize canvas to what's available
@@ -159,13 +178,58 @@ void CanvasSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 					draw_list->AddCircleFilled(ImVec2(origin.x + data->points[n][0], origin.y + data->points[n][1]), 4, IM_COL32(255, 255, 255, 255));
 					ps[n] = ImVec2(data->points[n] + origin);
 				}
-				draw_list->AddPolyline(ps, data->points.size(), IM_COL32(0, 255, 0, 255), false, 2.0f);
+				if (originPoints) {
+					draw_list->AddPolyline(ps, data->points.size(), IM_COL32(0, 255, 0, 255), false, 2.0f);
+				}
+			}
+
+			if (closed && data->points.size()>2) {
+				draw_list->AddLine(data->points[0] + origin, data->points.back() + origin, IM_COL32(0, 255, 0, 255), 2.0f);
 			}
 
 
-			if (data->points.size()) {
+			if (data->points.size() > 3) {
 				// º∆À„«˙œﬂ
-				
+				if (chaikin) {
+					ImVec2 subdiv_ps_chaikin[MAX_PLOT_NUM_POINTS];
+					std::vector<Ubpa::pointf2> subdivP_chaikin = data->points;
+					for (int st = 0; st < step_num; ++st) {
+						subdivP_chaikin = Subdivision::Chaikin_subdivision(&subdivP_chaikin, closed);
+					}
+					for (int n = 0; n < subdivP_chaikin.size(); ++n) {
+						subdiv_ps_chaikin[n] = ImVec2(subdivP_chaikin[n] + origin);
+					}
+					draw_list->AddPolyline(subdiv_ps_chaikin, subdivP_chaikin.size(), IM_COL32(0, 255, 255, 255), closed, 1.0f);
+					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (cubic + quad_) * 20), IM_COL32(255, 255, 255, 255), "Chaikin");
+					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (cubic + quad_) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (cubic + quad_) * 20), IM_COL32(0, 255, 255, 255), 2.0f);
+				}
+				if (cubic) {
+					ImVec2 subdiv_ps_cubic[MAX_PLOT_NUM_POINTS];
+					std::vector<Ubpa::pointf2> subdivP_cubic = data->points;
+					for (int st = 0; st < step_num; ++st) {
+						subdivP_cubic = Subdivision::cubic_subdivision(&subdivP_cubic, closed);
+					}
+					for (int n = 0; n < subdivP_cubic.size(); ++n) {
+						subdiv_ps_cubic[n] = ImVec2(subdivP_cubic[n] + origin);
+					}
+					draw_list->AddPolyline(subdiv_ps_cubic, subdivP_cubic.size(), IM_COL32(255, 0, 255, 255), closed, 1.0f);
+					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 - (quad_) * 20), IM_COL32(255, 255, 255, 255), "cubic");
+					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13 - (quad_) * 20), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13 - (quad_) * 20), IM_COL32(255, 0, 255, 255), 2.0f);
+				}
+				if (quad_)
+				{
+					ImVec2 subdiv_ps_quad[MAX_PLOT_NUM_POINTS];
+					std::vector<Ubpa::pointf2> subdivP_quad = data->points;
+					for (int st = 0; st < step_num; ++st) {
+						subdivP_quad = Subdivision::quad_subdivision(&subdivP_quad, closed, 1.0f / alpha);
+					}
+					for (int n = 0; n < subdivP_quad.size(); ++n) {
+						subdiv_ps_quad[n] = ImVec2(subdivP_quad[n] + origin);
+					}
+					draw_list->AddPolyline(subdiv_ps_quad, subdivP_quad.size(), IM_COL32(255, 255, 0, 255), closed, 1.0f);
+					draw_list->AddText(ImVec2(canvas_p1.x - 120, canvas_p1.y - 20 ), IM_COL32(255, 255, 255, 255), "quad");
+					draw_list->AddLine(ImVec2(canvas_p1.x - 175, canvas_p1.y - 13), ImVec2(canvas_p1.x - 125, canvas_p1.y - 13), IM_COL32(255, 255, 0, 255), 2.0f);
+				}
 			}
 			draw_list->PopClipRect();
 		}
