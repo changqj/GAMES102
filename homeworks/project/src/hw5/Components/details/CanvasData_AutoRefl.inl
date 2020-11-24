@@ -13,29 +13,25 @@ struct Ubpa::USRefl::TypeInfo<CanvasData> :
 #endif
     static constexpr AttrList attrs = {};
     static constexpr FieldList fields = {
-<<<<<<< HEAD
-        Field{"points", &CanvasData::points},
-        Field{"scrolling", &CanvasData::scrolling},
-        Field{"opt_enable_grid", &CanvasData::opt_enable_grid},
-        Field{"opt_enable_context_menu", &CanvasData::opt_enable_context_menu},
-        Field{"importData", &CanvasData::importData},
-        Field{"exportData", &CanvasData::exportData},
-        Field{"isEnd", &CanvasData::isEnd},
-=======
         Field {TSTR("points"), &Type::points},
         Field {TSTR("scrolling"), &Type::scrolling, AttrList {
             Attr {TSTR(UMeta::initializer), []()->Ubpa::valf2{ return { 0.f,0.f }; }},
         }},
         Field {TSTR("opt_enable_grid"), &Type::opt_enable_grid, AttrList {
-            Attr {TSTR(UMeta::initializer), []()->bool{ return { true }; }},
+            Attr {TSTR(UMeta::initializer), []()->bool{ return { false }; }},
         }},
         Field {TSTR("opt_enable_context_menu"), &Type::opt_enable_context_menu, AttrList {
             Attr {TSTR(UMeta::initializer), []()->bool{ return { true }; }},
         }},
-        Field {TSTR("adding_line"), &Type::adding_line, AttrList {
+        Field {TSTR("importData"), &Type::importData, AttrList {
             Attr {TSTR(UMeta::initializer), []()->bool{ return { false }; }},
         }},
->>>>>>> games/main
+        Field {TSTR("exportData"), &Type::exportData, AttrList {
+            Attr {TSTR(UMeta::initializer), []()->bool{ return { false }; }},
+        }},
+        Field {TSTR("isEnd"), &Type::isEnd, AttrList {
+            Attr {TSTR(UMeta::initializer), []()->bool{ return { false }; }},
+        }},
     };
 };
 
