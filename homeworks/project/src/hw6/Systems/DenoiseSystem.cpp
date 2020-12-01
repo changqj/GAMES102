@@ -15,6 +15,10 @@ void DenoiseSystem::OnUpdate(Ubpa::UECS::Schedule& schedule) {
 			return;
 
 		if (ImGui::Begin("Denoise")) {
+			if (ImGui::Button("Load mesh"))
+			{
+				data->heMesh->Init({ 0,1,3,2,3,1 }, 3);
+			}
 			if (ImGui::Button("Mesh to HEMesh")) {
 				data->heMesh->Clear();
 				[&]() {
